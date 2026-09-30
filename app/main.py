@@ -16,7 +16,10 @@ from app.modules.transactions.router import router as transactions_router
 configure_logging()
 logger = get_logger(__name__)
 
-app = FastAPI(title=settings.app_name)
+app = FastAPI(title=settings.app_name,
+    docs_url="/docs" if settings.environment == "development" else None,
+    redoc_url="/redoc" if settings.environment == "development" else None,
+    openapi_url="/openapi.json" if settings.environment == "development" else None,)
 
 app.include_router(users_router)
 app.include_router(documents_ai_router)
