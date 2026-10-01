@@ -5,6 +5,8 @@ from app.modules.transactions.models import OrderStatus, PaymentTerms
 
 class OrderCreate(BaseModel):
     match_id: int
+    constructora_org_id: int
+    provider_org_id: int
 
 
 class OrderConfirmRequest(BaseModel):
