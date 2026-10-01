@@ -19,18 +19,15 @@ class MatchingService:
         self.audit = audit
 
     async def create_quotation(
-        self, constructora_org_id: int, title: str, items_data: list[dict], actor_user_id: int,
+    self, constructora_org_id: int, title: str, items_data: list[dict], actor_user_id: int,
     ) -> Quotation:
         quotation = Quotation(
-            constructora_org_id=constructora_org_id, title=title,
+            constructora_org_id=constructora_org_id,
+            title=title,
             status=QuotationStatus.abierta,
+            items=[QuotationItem(**item_data) for item_data in items_data],  # <- ya van incluidos desde el constructor
         )
         saved = await self.quotation_repo.save(quotation)
-
-        for item_data in items_data:
-            item = QuotationItem(quotation_id=saved.id, **item_data)
-            saved.items.append(item)
-        await self.quotation_repo.save(saved)
 
         logger.info("Cotización creada: id=%s org=%s items=%s", saved.id, constructora_org_id, len(items_data))
         await self.audit.record(
