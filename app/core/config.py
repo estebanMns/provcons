@@ -6,6 +6,10 @@ class Settings(BaseSettings):
 
     app_name: str = "ProvCons - Backend"
     environment: str = "development"
+    
+     # IA
+    gemini_api_key: str = ""
+    gemini_default_model: str = "gemini-3.5-flash-lite"
 
     # Base de datos
     database_url: str = "postgresql+asyncpg://user:password@localhost:5432/provcons"
