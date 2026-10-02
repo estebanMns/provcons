@@ -2,14 +2,27 @@ from app.modules.documents_ai.repository import ProviderInventoryRepository
 from app.modules.documents_ai.models import ProviderInventoryItem
 from app.core.audit import AuditService
 from app.core.logging import get_logger
+from app.modules.documents_ai.normalizer import DocumentNormalizer
 
 logger = get_logger(__name__)
 
 
 class InventoryService:
-    def __init__(self, repository: ProviderInventoryRepository, audit: AuditService):
+    def __init__(self, repository: ProviderInventoryRepository, audit: AuditService, normalizer: DocumentNormalizer | None = None):
         self.repository = repository
         self.audit = audit
+        self.normalizer = normalizer
+
+    async def import_from_text(
+        self, provider_org_id: int, raw_text: str, actor_user_id: int | None = None,
+    ) -> list[ProviderInventoryItem]:
+        """Punto de entrada real: recibe texto crudo (de un PDF/Excel/foto ya
+        extraído), lo normaliza con IA, y lo guarda como inventario."""
+        if self.normalizer is None:
+            raise ValueError("Este service no tiene normalizer configurado")
+
+        items_data = await self.normalizer.normalize_inventory_text(raw_text)
+        return await self.bulk_import(provider_org_id, items_data, actor_user_id)
 
     async def add_item(
         self, provider_org_id: int, material_name: str, unit: str,
