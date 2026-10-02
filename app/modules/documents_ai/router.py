@@ -7,13 +7,35 @@ from app.modules.documents_ai.schemas import InventoryItemCreate, InventoryItemO
 from app.dependencies.auth import get_current_user, require_same_organization
 from app.modules.users.models import User
 from app.core.audit import AuditService, AuditRepository
+from pydantic import BaseModel
+from app.modules.documents_ai.normalizer import DocumentNormalizer
+from app.infrastructure.ai_client import AIClient
 
 router = APIRouter(prefix="/documents", tags=["Documentos e IA"])
 
 
+class ImportTextRequest(BaseModel):
+    raw_text: str
+
+
 def get_inventory_service(db: AsyncSession = Depends(get_db)) -> InventoryService:
     audit = AuditService(AuditRepository(db))
-    return InventoryService(ProviderInventoryRepository(db), audit)
+    normalizer = DocumentNormalizer(AIClient())
+    return InventoryService(ProviderInventoryRepository(db), audit, normalizer)
+
+
+@router.post("/inventory/{provider_org_id}/import-text", response_model=list[InventoryItemOut])
+async def import_inventory_from_text(
+    provider_org_id: int,
+    payload: ImportTextRequest,
+    service: InventoryService = Depends(get_inventory_service),
+    current_user: User = Depends(get_current_user),
+):
+    """Primer endpoint real de IA: recibe texto (temporalmente pegado a mano;
+    cuando tengamos ocr_pipeline.py, este texto vendrá de un PDF/imagen
+    subido), lo normaliza y lo guarda como inventario real."""
+    require_same_organization(provider_org_id, current_user)
+    return await service.import_from_text(provider_org_id, payload.raw_text, current_user.id)
 
 
 @router.get("/inventory/{provider_org_id}", response_model=list[InventoryItemOut])
