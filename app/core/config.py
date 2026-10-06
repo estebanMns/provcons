@@ -6,6 +6,7 @@ class Settings(BaseSettings):
 
     app_name: str = "ProvCons - Backend"
     environment: str = "development"
+    cors_origins: list[str] = ["http://localhost:3000"]
     
      # IA
     gemini_api_key: str = ""
