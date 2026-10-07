@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/Button";
 import { Criterion } from "@/components/ui/Criterion";
 import { Icon } from "@/components/ui/Icon";
 import { Score } from "@/components/ui/Score";
-import { getMe } from "@/lib/api";
-import type { User } from "@/lib/api";
+import { getMe, uploadQuotationFile } from "@/lib/api";
+import type { User, QuotationResult } from "@/lib/api";
 
 type Stage = "upload" | "processing" | "review" | "results";
 
@@ -17,6 +17,8 @@ export function Quotations() {
   const [user, setUser] = useState<User | null>(null);
   const [stage, setStage] = useState<Stage>("upload");
   const [fileName, setFileName] = useState<string>("");
+  const [quotationResult, setQuotationResult] = useState<QuotationResult | null>(null);
+  const [error, setError] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const timer = useRef<number | null>(null);
 
@@ -35,11 +37,11 @@ export function Quotations() {
 
   const isConstructora = user?.organization?.type === "constructora";
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setFileName(file.name);
-      processQuotation();
+      await processQuotationFile(file);
     }
   };
 
@@ -47,11 +49,23 @@ export function Quotations() {
     fileInputRef.current?.click();
   };
 
-  const processQuotation = () => {
+  const processQuotationFile = async (file: File) => {
     setStage("processing");
-    if (timer.current) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setStage("review"), 1800);
+    setError("");
+
+    try {
+      const result = await uploadQuotationFile(file, file.name);
+      setQuotationResult(result);
+
+      // Simular tiempo de procesamiento
+      if (timer.current) window.clearTimeout(timer.current);
+      timer.current = window.setTimeout(() => setStage("results"), 1500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al procesar la cotización");
+      setStage("upload");
+    }
   };
+
   const goOrders = () => router.push("/ordenes");
 
   if (isConstructora && (stage === "upload" || stage === "processing")) {
@@ -148,6 +162,82 @@ export function Quotations() {
     return null;
   }
 
+  // Pantalla de resultados con proveedores recomendados
+  if (isConstructora && stage === "results" && quotationResult) {
+    return (
+      <div className="page">
+        <section className="page-heading">
+          <div>
+            <p className="eyebrow">RESULTADOS / {quotationResult.title}</p>
+            <h1>Proveedores recomendados</h1>
+            <p>La IA analizó {quotationResult.items_extracted} materiales y encontró {quotationResult.matches_found} coincidencias. Aquí están los mejores proveedores.</p>
+          </div>
+          <Button variant="secondary" icon="plus" onClick={() => {
+            setStage("upload");
+            setQuotationResult(null);
+          }}>Nueva cotización</Button>
+        </section>
+
+        <div className="match-layout">
+          <div className="match-list">
+            {quotationResult.top_providers && quotationResult.top_providers.length > 0 ? (
+              quotationResult.top_providers.map((provider, i) => (
+                <article key={provider.id} className={`match-card ${i === 0 ? "best-match" : ""}`}>
+                  {i === 0 && <div className="best-label"><Icon name="spark" size={14} /> MEJOR OPCIÓN SEGÚN IA</div>}
+                  <div className="match-main">
+                    <div className="company-logo">PR</div>
+                    <div>
+                      <h2>Proveedor {provider.provider_org_id}</h2>
+                      <p><Icon name="shield" size={14} /> Verificado · IA Score: {Math.round(provider.score * 100)}%</p>
+                    </div>
+                    <Score value={Math.round(provider.score * 100)} />
+                  </div>
+                  <div className="criteria">
+                    <Criterion
+                      label="Disponibilidad"
+                      value={`${Math.round((provider.criteria_breakdown?.disponibilidad || 0.5) * 100)}% del material`}
+                      percent={Math.round((provider.criteria_breakdown?.disponibilidad || 0.5) * 100)}
+                    />
+                    <Criterion
+                      label="Precio"
+                      value={`${Math.round((provider.criteria_breakdown?.precio || 0.5) * 100)}% competitivo`}
+                      percent={Math.round((provider.criteria_breakdown?.precio || 0.5) * 100)}
+                    />
+                    <Criterion
+                      label="Logística"
+                      value={`${Math.round((provider.criteria_breakdown?.logistica || 0.5) * 100)}% de velocidad`}
+                      percent={Math.round((provider.criteria_breakdown?.logistica || 0.5) * 100)}
+                    />
+                    <Criterion
+                      label="Confiabilidad"
+                      value={`${Math.round((provider.criteria_breakdown?.confiabilidad || 0.5) * 100)}% historial`}
+                      percent={Math.round((provider.criteria_breakdown?.confiabilidad || 0.5) * 100)}
+                    />
+                  </div>
+                  <div className="match-bottom">
+                    <div><span>Análisis IA</span><strong>{provider.criteria_breakdown?.justificacion || "Análisis completado"}</strong></div>
+                    <Button variant={i === 0 ? "primary" : "secondary"} onClick={goOrders}>
+                      {i === 0 ? "Elegir mejor proveedor" : "Considerar"}
+                    </Button>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <div style={{ padding: "2rem", textAlign: "center" }}>
+                <p style={{ color: "var(--text-secondary)" }}>No se encontraron proveedores coincidentes</p>
+                <Button variant="secondary" onClick={() => {
+                  setStage("upload");
+                  setQuotationResult(null);
+                }}>Intentar otra cotización</Button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Pantalla vacía o de cotizaciones
   return (
     <div className="page">
       <section className="page-heading">
@@ -158,6 +248,11 @@ export function Quotations() {
         </div>
         {isConstructora && <Button variant="secondary" icon="plus" onClick={() => setStage("upload")}>Subir cotización</Button>}
       </section>
+      {error && (
+        <section className="card" style={{ padding: "1rem", marginBottom: "1rem", background: "#fee", borderColor: "#fcc" }}>
+          <p style={{ color: "#c00", margin: 0 }}>❌ Error: {error}</p>
+        </section>
+      )}
       <section className="card" style={{ padding: "3rem", textAlign: "center" }}>
         <div style={{ opacity: 0.5, marginBottom: "1rem" }}>
           <Icon name="file" size={48} />

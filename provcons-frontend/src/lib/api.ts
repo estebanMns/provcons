@@ -103,3 +103,39 @@ export async function login(payload: LoginPayload): Promise<string> {
 export async function getMe(): Promise<User> {
   return fetchAPI<User>("/users/me");
 }
+
+export interface QuotationResult {
+  quotation_id: number;
+  title: string;
+  items_extracted: number;
+  matches_found: number;
+  top_providers: any[];
+}
+
+export async function uploadQuotationFile(
+  file: File,
+  title: string,
+): Promise<QuotationResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("title", title);
+
+  const token = getToken();
+  const headers = new Headers();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const response = await fetch(`${API_BASE}/matching/quotations/upload`, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || `Upload error: ${response.status}`);
+  }
+
+  return response.json();
+}
