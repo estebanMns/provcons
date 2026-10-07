@@ -42,14 +42,14 @@ async function fetchAPI<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const headers: HeadersInit = {
+  const headers = new Headers({
     "Content-Type": "application/json",
-    ...options.headers,
-  };
+    ...(typeof options.headers === "object" && options.headers),
+  });
 
   const token = getToken();
   if (token) {
-    headers.Authorization = `Bearer ${token}`;
+    headers.set("Authorization", `Bearer ${token}`);
   }
 
   const response = await fetch(`${API_BASE}${path}`, {

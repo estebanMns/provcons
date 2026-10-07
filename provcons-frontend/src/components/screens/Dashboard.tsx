@@ -36,7 +36,9 @@ export function Dashboard() {
       </section>
 
       <section className="card" style={{ padding: "2rem", textAlign: "center" }}>
-        <Icon name={provider ? "box" : "file"} size={48} style={{ opacity: 0.5, marginBottom: "1rem" }} />
+        <div style={{ opacity: 0.5, marginBottom: "1rem" }}>
+          <Icon name={provider ? "box" : "file"} size={48} />
+        </div>
         <h2 style={{ marginBottom: "0.5rem" }}>Aquí irán tus datos</h2>
         <p style={{ color: "var(--text-secondary)" }}>
           {provider

@@ -16,7 +16,9 @@ export function Orders() {
       </section>
 
       <section className="card" style={{ padding: "3rem", textAlign: "center" }}>
-        <Icon name="truck" size={48} style={{ opacity: 0.5, marginBottom: "1rem" }} />
+        <div style={{ opacity: 0.5, marginBottom: "1rem" }}>
+          <Icon name="truck" size={48} />
+        </div>
         <h2 style={{ marginBottom: "0.5rem" }}>Sin órdenes</h2>
         <p style={{ color: "var(--text-secondary)" }}>
           No tienes órdenes creadas aún. Crea tu primera orden para comenzar a gestionar tus compras y ventas.

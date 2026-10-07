@@ -159,7 +159,9 @@ export function Quotations() {
         {isConstructora && <Button variant="secondary" icon="plus" onClick={() => setStage("upload")}>Subir cotización</Button>}
       </section>
       <section className="card" style={{ padding: "3rem", textAlign: "center" }}>
-        <Icon name="file" size={48} style={{ opacity: 0.5, marginBottom: "1rem" }} />
+        <div style={{ opacity: 0.5, marginBottom: "1rem" }}>
+          <Icon name="file" size={48} />
+        </div>
         <h2 style={{ marginBottom: "0.5rem" }}>Sin cotizaciones</h2>
         <p style={{ color: "var(--text-secondary)" }}>
           No tienes cotizaciones aún. {isConstructora ? "Crea una solicitud de materiales para comenzar a comparar proveedores." : "Las solicitudes de cotizaciones aparecerán aquí."}
