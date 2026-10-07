@@ -7,7 +7,7 @@ import type { Role } from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
-import { signup, login, setToken } from "@/lib/api";
+import { signup, login, setToken, getMe } from "@/lib/api";
 
 type Step = "login" | "register" | "ready";
 
@@ -23,8 +23,8 @@ export function Auth() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
 
-  const [loginEmail, setLoginEmail] = useState("carlos@materialesdelnorte.com");
-  const [loginPassword, setLoginPassword] = useState("provcons2025");
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
 
   const [signupOrgName, setSignupOrgName] = useState("");
   const [signupTaxId, setSignupTaxId] = useState("");
@@ -43,7 +43,11 @@ export function Auth() {
     try {
       const token = await login({ email: loginEmail, password: loginPassword });
       setToken(token);
-      enter("proveedor");
+
+      // Obtener el usuario y su organización para saber el rol real
+      const user = await getMe();
+      const userRole = user.organization?.type === "proveedor" ? "proveedor" : "constructora";
+      enter(userRole);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Error al iniciar sesión";
       setError(message);
@@ -64,7 +68,7 @@ export function Auth() {
         email: signupEmail,
         password: signupPassword,
       });
-      setToken("");
+      // No guardar token aquí, el usuario va a ready y luego puede login
       setStep("ready");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Error al crear la organización";
