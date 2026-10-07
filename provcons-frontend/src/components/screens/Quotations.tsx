@@ -105,59 +105,19 @@ export function Quotations() {
     <div className="page">
       <section className="page-heading">
         <div>
-          <p className="eyebrow">COTIZACIONES / COT-0248</p>
-          <h1>{constructora ? "Proveedores recomendados" : "Oportunidad compatible"}</h1>
-          <p>{constructora ? "Comparamos precio, disponibilidad, logística y condiciones para ayudarte a decidir." : "Tu inventario cumple con los materiales principales de esta solicitud."}</p>
+          <p className="eyebrow">COTIZACIONES</p>
+          <h1>Cotizaciones</h1>
+          <p>Aquí aparecerán tus cotizaciones y oportunidades de proveedores.</p>
         </div>
-        {constructora ? <Button variant="secondary" icon="plus" onClick={() => setStage("upload")}>Nueva solicitud</Button> : <Button variant="secondary" icon="file">Ver solicitud</Button>}
+        {constructora && <Button variant="secondary" icon="plus" onClick={() => setStage("upload")}>Nueva solicitud</Button>}
       </section>
-      <div className="trust-banner">
-        <span><Icon name="spark" /></span>
-        <div><strong>Recomendación explicable</strong><p>El puntaje combina cuatro criterios. Ningún proveedor paga para aparecer primero.</p></div>
-        <button>¿Cómo calculamos esto?</button>
-      </div>
-      <div className="match-layout">
-        <div className="match-list">
-          {matchData.map((m, i) => (
-            <article className={`match-card ${i === 0 ? "best-match" : ""}`} key={m.name}>
-              {i === 0 && <div className="best-label"><Icon name="spark" size={14} /> MEJOR OPCIÓN</div>}
-              <div className="match-main">
-                <div className="company-logo">{m.name.split(" ").map((x) => x[0]).join("").slice(0, 2)}</div>
-                <div><h2>{m.name}</h2><p><Icon name="shield" size={14} /> Empresa verificada · 4,8 en entregas</p></div>
-                <Score value={m.score} />
-              </div>
-              <div className="criteria">
-                <Criterion label="Disponibilidad" value={i === 2 ? "92% de la solicitud" : "100% disponible"} percent={i === 2 ? 92 : 100} />
-                <Criterion label="Precio" value={i === 2 ? "7% bajo promedio" : i === 0 ? "4% bajo promedio" : "En el promedio"} percent={i === 2 ? 98 : i === 0 ? 91 : 78} />
-                <Criterion label="Logística" value={`Entrega en ${m.delivery}`} percent={i === 1 ? 98 : i === 0 ? 90 : 60} />
-                <Criterion label="Historial" value="Cumplimiento alto" percent={i === 0 ? 96 : 88} />
-              </div>
-              <div className="match-bottom">
-                <div><span>Total estimado</span><strong>{m.price}</strong></div>
-                <div className="match-tags">
-                  <Badge tone="info"><Icon name="wallet" size={13} /> {m.payment}</Badge>
-                  <Badge tone={m.tone}><Icon name="shield" size={13} /> Riesgo {m.risk.toLowerCase()}</Badge>
-                </div>
-                <Button variant={i === 0 ? "primary" : "secondary"} onClick={goOrders}>
-                  {constructora ? (i === 0 ? "Elegir mejor proveedor" : "Elegir proveedor") : "Enviar propuesta"}
-                </Button>
-              </div>
-            </article>
-          ))}
-        </div>
-        <aside className="quote-summary card">
-          <p className="eyebrow">SOLICITUD</p>
-          <h2>Acero para Torre Alameda</h2>
-          <span>COT-0248 · Cierra en 3 días</span>
-          <div><strong>3</strong><small>productos</small></div>
-          <ul>
-            <li><span>Varilla corrugada ½&quot;</span><b>800 und</b></li>
-            <li><span>Malla electrosoldada</span><b>120 und</b></li>
-            <li><span>Alambre negro</span><b>60 kg</b></li>
-          </ul>
-          <div className="location"><Icon name="route" /><span><small>ENTREGA EN</small><strong>Chapinero, Bogotá</strong></span></div>
-        </aside>
-      </div>
+      <section className="card" style={{ padding: "3rem", textAlign: "center" }}>
+        <Icon name="file" size={48} style={{ opacity: 0.5, marginBottom: "1rem" }} />
+        <h2 style={{ marginBottom: "0.5rem" }}>Sin cotizaciones</h2>
+        <p style={{ color: "var(--text-secondary)" }}>
+          No tienes cotizaciones aún. {constructora ? "Crea una solicitud de materiales para comenzar a comparar proveedores." : "Las solicitudes de cotizaciones aparecerán aquí."}
+        </p>
+      </section>
     </div>
   );
 }
