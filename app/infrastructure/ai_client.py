@@ -29,37 +29,66 @@ class AIClient:
         self._client = genai.Client(api_key=api_key or settings.gemini_api_key)
         self.default_model = default_model or settings.gemini_default_model
 
-        async def generate_json_from_file(
-            self, file_bytes: bytes, mime_type: str, system_instruction: str,
-            model: str | None = None, max_retries: int = 3,
-            ) -> dict | None:
-            """Igual que generate_json, pero el 'prompt' es un archivo (PDF o
-            imagen) en vez de texto. Gemini lo lee directamente — no necesitamos
-            un OCR tradicional por separado."""
-            model_name = model or self.default_model
+    async def generate_json(
+        self, prompt: str, system_instruction: str,
+        model: str | None = None, max_retries: int = 3,
+    ) -> dict | None:
+        """Genera JSON a partir de un prompt de texto."""
+        model_name = model or self.default_model
 
-            for attempt in range(1, max_retries + 1):
-                try:
-                    response = await self._client.aio.models.generate_content(
-                        model=model_name,
-                        contents=[types.Part.from_bytes(data=file_bytes, mime_type=mime_type)],
-                        config={
-                            "system_instruction": system_instruction,
-                            "response_mime_type": "application/json",
-                        },
-                    )
-                    return self._parse_json(response.text)
+        for attempt in range(1, max_retries + 1):
+            try:
+                response = await self._client.aio.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config={
+                        "system_instruction": system_instruction,
+                        "response_mime_type": "application/json",
+                    },
+                )
+                return self._parse_json(response.text)
 
-                except Exception as e:
-                    wait = 2 ** attempt
-                    logger.warning(
-                        "Fallo en llamada a IA con archivo (intento %s/%s): %s. Reintentando en %ss...",
-                        attempt, max_retries, str(e), wait,
-                    )
-                    if attempt == max_retries:
-                        logger.error("IA agotó reintentos procesando archivo: %s", str(e))
-                        raise AIServiceError("El servicio de IA no pudo procesar el documento")
-                    await asyncio.sleep(wait)
+            except Exception as e:
+                wait = 2 ** attempt
+                logger.warning(
+                    "Fallo en llamada a IA con texto (intento %s/%s): %s. Reintentando en %ss...",
+                    attempt, max_retries, str(e), wait,
+                )
+                if attempt == max_retries:
+                    logger.error("IA agotó reintentos procesando texto: %s", str(e))
+                    raise AIServiceError("El servicio de IA no pudo procesar la solicitud")
+                await asyncio.sleep(wait)
+
+    async def generate_json_from_file(
+        self, file_bytes: bytes, mime_type: str, system_instruction: str,
+        model: str | None = None, max_retries: int = 3,
+    ) -> dict | None:
+        """Genera JSON a partir de un archivo (PDF o imagen). Gemini lo lee
+        directamente — no necesitamos un OCR tradicional por separado."""
+        model_name = model or self.default_model
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                response = await self._client.aio.models.generate_content(
+                    model=model_name,
+                    contents=[types.Part.from_bytes(data=file_bytes, mime_type=mime_type)],
+                    config={
+                        "system_instruction": system_instruction,
+                        "response_mime_type": "application/json",
+                    },
+                )
+                return self._parse_json(response.text)
+
+            except Exception as e:
+                wait = 2 ** attempt
+                logger.warning(
+                    "Fallo en llamada a IA con archivo (intento %s/%s): %s. Reintentando en %ss...",
+                    attempt, max_retries, str(e), wait,
+                )
+                if attempt == max_retries:
+                    logger.error("IA agotó reintentos procesando archivo: %s", str(e))
+                    raise AIServiceError("El servicio de IA no pudo procesar el documento")
+                await asyncio.sleep(wait)
 
     @staticmethod
     def _parse_json(raw_text: str) -> dict:
