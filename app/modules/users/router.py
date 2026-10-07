@@ -4,8 +4,7 @@ from app.db.session import get_db
 from app.modules.users.repository import UserRepository, OrganizationRepository
 from app.modules.users.service import UserService
 from app.modules.users.schemas import (
-    SignupRequest, UserOut, LoginRequest, TokenResponse,
-    MeOut, OrganizationCreate, OrganizationOut,
+    SignupRequest, UserOut, LoginRequest, TokenResponse, MeOut,
 )
 from app.dependencies.auth import get_current_user
 from app.modules.users.models import User
