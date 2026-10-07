@@ -16,6 +16,9 @@ export function Quotations() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [stage, setStage] = useState<Stage>("upload");
+  const [fileName, setFileName] = useState<string>("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const timer = useRef<number | null>(null);
 
   useEffect(() => {
     getMe()
@@ -31,7 +34,18 @@ export function Quotations() {
   }, [router]);
 
   const isConstructora = user?.organization?.type === "constructora";
-  const timer = useRef<number | null>(null);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setFileName(file.name);
+      processQuotation();
+    }
+  };
+
+  const handleSelectFile = () => {
+    fileInputRef.current?.click();
+  };
 
   const processQuotation = () => {
     setStage("processing");
@@ -52,7 +66,14 @@ export function Quotations() {
             <div className="upload-icon"><Icon name="file" size={28} /></div>
             <h2>Sube tu lista de materiales</h2>
             <p>No importa si viene de Excel, un PDF del proyecto o una foto tomada en obra. Podrás corregir todo antes de enviarla.</p>
-            <Button onClick={processQuotation}>Seleccionar archivo</Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.xlsx,.xls,.jpg,.jpeg,.png"
+              onChange={handleFileSelect}
+              style={{ display: "none" }}
+            />
+            <Button onClick={handleSelectFile}>Seleccionar archivo</Button>
             <div className="file-types"><span><Icon name="pdf" /> PDF</span><span><Icon name="excel" /> Excel</span><span><Icon name="camera" /> Foto</span></div>
             <small><Icon name="shield" size={15} /> Archivo privado · Máximo 25 MB</small>
           </section>
@@ -61,7 +82,14 @@ export function Quotations() {
             <div className="ai-loader"><span /><Icon name="spark" size={30} /></div>
             <h2>Estamos leyendo tu solicitud</h2>
             <p>Identificamos materiales, cantidades y unidades para buscar proveedores que puedan cumplir toda la orden.</p>
-            <div className="processing-file"><Icon name="pdf" /><div><strong>Lista_materiales_Torre_Alameda.pdf</strong><span>Reconociendo cantidades y unidades…</span></div><Badge tone="info">72%</Badge></div>
+            <div className="processing-file">
+              <Icon name={fileName.endsWith(".pdf") ? "pdf" : fileName.endsWith(".xlsx") || fileName.endsWith(".xls") ? "excel" : "camera"} />
+              <div>
+                <strong>{fileName || "archivo"}</strong>
+                <span>Reconociendo cantidades y unidades…</span>
+              </div>
+              <Badge tone="info">72%</Badge>
+            </div>
             <div className="progress quotation-progress"><span /></div>
             <small><Icon name="shield" size={15} /> Compararemos proveedores solo cuando confirmes los datos.</small>
           </section>
@@ -134,7 +162,7 @@ export function Quotations() {
         <Icon name="file" size={48} style={{ opacity: 0.5, marginBottom: "1rem" }} />
         <h2 style={{ marginBottom: "0.5rem" }}>Sin cotizaciones</h2>
         <p style={{ color: "var(--text-secondary)" }}>
-          No tienes cotizaciones aún. {constructora ? "Crea una solicitud de materiales para comenzar a comparar proveedores." : "Las solicitudes de cotizaciones aparecerán aquí."}
+          No tienes cotizaciones aún. {isConstructora ? "Crea una solicitud de materiales para comenzar a comparar proveedores." : "Las solicitudes de cotizaciones aparecerán aquí."}
         </p>
       </section>
     </div>

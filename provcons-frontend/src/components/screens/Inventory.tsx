@@ -15,6 +15,9 @@ export function Inventory() {
   const [user, setUser] = useState<User | null>(null);
   const [stage, setStage] = useState<Stage>("idle");
   const [items, setItems] = useState<any[]>([]);
+  const [fileName, setFileName] = useState<string>("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const timer = useRef<number | null>(null);
 
   useEffect(() => {
     getMe()
@@ -28,11 +31,22 @@ export function Inventory() {
         router.push("/login");
       });
   }, [router]);
-  const timer = useRef<number | null>(null);
 
   if (!user) {
     return null;
   }
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setFileName(file.name);
+      process();
+    }
+  };
+
+  const handleSelectFile = () => {
+    fileInputRef.current?.click();
+  };
 
   const process = () => {
     setStage("processing");
@@ -52,7 +66,14 @@ export function Inventory() {
             <div className="upload-icon"><Icon name="upload" size={28} /></div>
             <h2>Arrastra aquí tu catálogo</h2>
             <p>También puedes seleccionar un archivo desde tu dispositivo.</p>
-            <Button onClick={process}>Seleccionar archivo</Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.xlsx,.xls,.jpg,.jpeg,.png"
+              onChange={handleFileSelect}
+              style={{ display: "none" }}
+            />
+            <Button onClick={handleSelectFile}>Seleccionar archivo</Button>
             <div className="file-types"><span><Icon name="pdf" /> PDF</span><span><Icon name="excel" /> Excel</span><span><Icon name="camera" /> Foto</span></div>
             <small>Máximo 25 MB · Tus archivos están protegidos</small>
           </section>
@@ -61,7 +82,14 @@ export function Inventory() {
             <div className="ai-loader"><span /><Icon name="spark" size={30} /></div>
             <h2>Estamos organizando tu catálogo</h2>
             <p>Nuestra IA está leyendo productos, cantidades y precios. Suele tomar menos de un minuto; puedes dejar esta pantalla abierta.</p>
-            <div className="processing-file"><Icon name="excel" /><div><strong>Inventario_mayo_2025.xlsx</strong><span>Analizando 4 de 6 páginas…</span></div><Badge tone="info">67%</Badge></div>
+            <div className="processing-file">
+              <Icon name={fileName.endsWith(".pdf") ? "pdf" : fileName.endsWith(".xlsx") || fileName.endsWith(".xls") ? "excel" : "camera"} />
+              <div>
+                <strong>{fileName || "archivo"}</strong>
+                <span>Analizando datos…</span>
+              </div>
+              <Badge tone="info">67%</Badge>
+            </div>
             <div className="progress"><span /></div>
             <small><Icon name="shield" size={15} /> No publicaremos nada sin tu aprobación.</small>
           </section>
