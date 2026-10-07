@@ -8,15 +8,15 @@ class Settings(BaseSettings):
     environment: str = "development"
     cors_origins: list[str] = ["http://localhost:3000"]
 
-     # IA
+    # IA
     gemini_api_key: str = ""
     gemini_default_model: str = "gemini-3.5-flash-lite"
 
-    # Base de datos
-    database_url: str = "postgresql+asyncpg://user:password@localhost:5432/provcons"
+    # Base de datos - Se carga del .env
+    database_url: str
 
-    # JWT / Auth
-    secret_key: str = "cambia-esta-clave-en-produccion"
+    # JWT / Auth - Se carga del .env
+    secret_key: str
     access_token_expire_minutes: int = 60
 
     class Config:
