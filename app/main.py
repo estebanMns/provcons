@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.core.exceptions import DomainError
 from app.core.logging import configure_logging, get_logger
+from app.db.session import engine, Base
 
 from app.modules.users.router import router as users_router
 from app.modules.documents_ai.router import router as documents_ai_router
@@ -26,6 +27,13 @@ _is_dev = settings.environment == "development"
 async def lifespan(app: FastAPI):
     """Reemplaza a @app.on_event('startup'), que está deprecado en FastAPI."""
     logger.info("=== %s iniciando en modo '%s' ===", settings.app_name, settings.environment)
+
+    # Crear tablas en desarrollo
+    if _is_dev:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+            logger.info("Tablas de base de datos creadas/verificadas")
+
     yield
     logger.info("=== %s detenido ===", settings.app_name)
 

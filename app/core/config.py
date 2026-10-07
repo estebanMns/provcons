@@ -7,13 +7,13 @@ class Settings(BaseSettings):
     app_name: str = "ProvCons - Backend"
     environment: str = "development"
     cors_origins: list[str] = ["http://localhost:3000"]
-    
+
      # IA
     gemini_api_key: str = ""
     gemini_default_model: str = "gemini-3.5-flash-lite"
 
-    # Base de datos
-    database_url: str = "postgresql+asyncpg://user:password@localhost:5432/provcons"
+    # Base de datos: SQLite para desarrollo, PostgreSQL para producción
+    database_url: str = "sqlite+aiosqlite:///./provcons.db"
 
     # JWT / Auth
     secret_key: str = "cambia-esta-clave-en-produccion"
