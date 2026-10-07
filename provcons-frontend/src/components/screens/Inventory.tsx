@@ -1,18 +1,38 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
+import { getMe } from "@/lib/api";
+import type { User } from "@/lib/api";
 
 type Stage = "idle" | "processing" | "review" | "done";
 
 export function Inventory() {
   const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
   const [stage, setStage] = useState<Stage>("idle");
   const [items, setItems] = useState<any[]>([]);
+
+  useEffect(() => {
+    getMe()
+      .then((userData) => {
+        setUser(userData);
+        if (userData.organization?.type !== "proveedor") {
+          router.push("/dashboard");
+        }
+      })
+      .catch(() => {
+        router.push("/login");
+      });
+  }, [router]);
   const timer = useRef<number | null>(null);
+
+  if (!user) {
+    return null;
+  }
 
   const process = () => {
     setStage("processing");

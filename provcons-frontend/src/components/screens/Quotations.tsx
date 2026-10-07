@@ -1,20 +1,36 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useRole } from "@/context/RoleContext";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Criterion } from "@/components/ui/Criterion";
 import { Icon } from "@/components/ui/Icon";
 import { Score } from "@/components/ui/Score";
+import { getMe } from "@/lib/api";
+import type { User } from "@/lib/api";
 
 type Stage = "upload" | "processing" | "review" | "results";
 
 export function Quotations() {
-  const { role } = useRole();
   const router = useRouter();
-  const [stage, setStage] = useState<Stage>(role === "constructora" ? "upload" : "results");
+  const [user, setUser] = useState<User | null>(null);
+  const [stage, setStage] = useState<Stage>("upload");
+
+  useEffect(() => {
+    getMe()
+      .then((userData) => {
+        setUser(userData);
+        if (userData.organization?.type !== "constructora") {
+          router.push("/dashboard");
+        }
+      })
+      .catch(() => {
+        router.push("/login");
+      });
+  }, [router]);
+
+  const isConstructora = user?.organization?.type === "constructora";
   const timer = useRef<number | null>(null);
 
   const processQuotation = () => {
@@ -24,7 +40,7 @@ export function Quotations() {
   };
   const goOrders = () => router.push("/ordenes");
 
-  if (role === "constructora" && (stage === "upload" || stage === "processing")) {
+  if (isConstructora && (stage === "upload" || stage === "processing")) {
     return (
       <div className="page narrow-page">
         <section className="page-heading">
@@ -55,7 +71,7 @@ export function Quotations() {
     );
   }
 
-  if (role === "constructora" && stage === "review") {
+  if (isConstructora && stage === "review") {
     const rows = [
       { name: 'Varilla corrugada ½"', qty: "800", unit: "Unidades", conf: 98, tone: "success" as const },
       { name: "Malla electrosoldada", qty: "120", unit: "Unidades", conf: 96, tone: "success" as const },
@@ -100,7 +116,10 @@ export function Quotations() {
     );
   }
 
-  const constructora = role === "constructora";
+  if (!user) {
+    return null;
+  }
+
   return (
     <div className="page">
       <section className="page-heading">
@@ -109,7 +128,7 @@ export function Quotations() {
           <h1>Cotizaciones</h1>
           <p>Aquí aparecerán tus cotizaciones y oportunidades de proveedores.</p>
         </div>
-        {constructora && <Button variant="secondary" icon="plus" onClick={() => setStage("upload")}>Subir cotización</Button>}
+        {isConstructora && <Button variant="secondary" icon="plus" onClick={() => setStage("upload")}>Subir cotización</Button>}
       </section>
       <section className="card" style={{ padding: "3rem", textAlign: "center" }}>
         <Icon name="file" size={48} style={{ opacity: 0.5, marginBottom: "1rem" }} />
