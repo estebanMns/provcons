@@ -59,5 +59,7 @@ async def login(payload: LoginRequest, service: UserService = Depends(get_user_s
 
 
 @router.get("/me", response_model=MeOut)
-async def me(current_user: User = Depends(get_current_user)):
-    return current_user
+async def me(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    user_repo = UserRepository(db)
+    user = await user_repo.get_by_id(current_user.id, load_organization=True)
+    return user or current_user
