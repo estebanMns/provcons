@@ -8,17 +8,10 @@ import { Icon } from "@/components/ui/Icon";
 
 type Stage = "idle" | "processing" | "review" | "done";
 
-const initialItems = [
-  { name: "Cemento gris UG 50 kg", sku: "CEM-UG50", qty: 420, unit: "Bulto", price: "36.800", confidence: 99 },
-  { name: "Varilla corrugada ½ pulg.", sku: "VAR-12-6M", qty: 180, unit: "Unidad", price: "42.500", confidence: 96 },
-  { name: "Bloque estructural N.° 5", sku: "BLQ-E5", qty: 960, unit: "Unidad", price: "3.250", confidence: 91 },
-  { name: "Arena lavada de río", sku: "ARE-LAV", qty: 24, unit: "m³", price: "128.000", confidence: 84 },
-];
-
 export function Inventory() {
   const router = useRouter();
   const [stage, setStage] = useState<Stage>("idle");
-  const [items, setItems] = useState(initialItems);
+  const [items, setItems] = useState<any[]>([]);
   const timer = useRef<number | null>(null);
 
   const process = () => {

@@ -11,12 +11,6 @@ import { Score } from "@/components/ui/Score";
 
 type Stage = "upload" | "processing" | "review" | "results";
 
-const matchData = [
-  { name: "Aceros Colombia", score: 96, price: "$ 47.200.000", delivery: "2 días", payment: "30 días", risk: "Bajo", tone: "success" as const },
-  { name: "Suministros Andinos", score: 88, price: "$ 49.100.000", delivery: "1 día", payment: "Contado", risk: "Bajo", tone: "success" as const },
-  { name: "Ferretería Industrial", score: 79, price: "$ 45.900.000", delivery: "5 días", payment: "15 días", risk: "Medio", tone: "warning" as const },
-];
-
 export function Quotations() {
   const { role } = useRole();
   const router = useRouter();
