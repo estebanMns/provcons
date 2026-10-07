@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { RoleProvider } from "@/context/RoleContext";
+import { ClientAuthProvider } from "@/components/ClientAuthProvider";
 import "./globals.css";
 
 const manrope = localFont({
@@ -19,7 +20,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="es" className={manrope.variable}>
       <body>
-        <RoleProvider>{children}</RoleProvider>
+        <ClientAuthProvider>
+          <RoleProvider>{children}</RoleProvider>
+        </ClientAuthProvider>
       </body>
     </html>
   );

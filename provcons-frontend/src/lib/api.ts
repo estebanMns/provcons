@@ -72,10 +72,16 @@ export function getToken(): string | null {
 
 export function setToken(token: string): void {
   localStorage.setItem(TOKEN_KEY, token);
+  if (typeof document !== "undefined") {
+    document.cookie = `auth_token=${token}; path=/; max-age=${60 * 60 * 24 * 7}`;
+  }
 }
 
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
+  if (typeof document !== "undefined") {
+    document.cookie = "auth_token=; path=/; max-age=0";
+  }
 }
 
 export async function signup(payload: SignupPayload): Promise<User> {
