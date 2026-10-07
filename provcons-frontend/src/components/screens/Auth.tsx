@@ -7,6 +7,7 @@ import type { Role } from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
+import { signup, login, setToken } from "@/lib/api";
 
 type Step = "login" | "register" | "ready";
 
@@ -19,10 +20,58 @@ export function Auth() {
   const { setRole } = useRole();
   const [step, setStep] = useState<Step>("login");
   const [authRole, setAuthRole] = useState<Role>("proveedor");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>("");
+
+  const [loginEmail, setLoginEmail] = useState("carlos@materialesdelnorte.com");
+  const [loginPassword, setLoginPassword] = useState("provcons2025");
+
+  const [signupOrgName, setSignupOrgName] = useState("");
+  const [signupTaxId, setSignupTaxId] = useState("");
+  const [signupFullName, setSignupFullName] = useState("");
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
 
   const enter = (role: Role) => {
     setRole(role);
     router.push(role === "proveedor" ? "/inventario" : "/dashboard");
+  };
+
+  const handleLogin = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const token = await login({ email: loginEmail, password: loginPassword });
+      setToken(token);
+      enter("proveedor");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Error al iniciar sesión";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignup = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const user = await signup({
+        organization_name: signupOrgName,
+        organization_type: authRole,
+        tax_id: signupTaxId,
+        full_name: signupFullName,
+        email: signupEmail,
+        password: signupPassword,
+      });
+      setToken("");
+      setStep("ready");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Error al crear la organización";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (step === "ready") {
@@ -81,28 +130,31 @@ export function Auth() {
           <p className="eyebrow">{step === "login" ? "ACCESO SEGURO" : "CREAR ORGANIZACIÓN"}</p>
           <h2>{step === "login" ? "Bienvenido de nuevo" : "Cuéntanos sobre tu empresa"}</h2>
           <p>{step === "login" ? "Ingresa con tu correo corporativo." : "Usaremos estos datos para configurar tu experiencia."}</p>
+          {error && <div style={{ color: "red", marginBottom: "1rem" }}>{error}</div>}
           {step === "login" ? (
             <>
-              <label>Correo corporativo<input type="email" placeholder="nombre@empresa.com" defaultValue="carlos@materialesdelnorte.com" /></label>
-              <label>Contraseña<div className="password-field"><input type="password" defaultValue="provcons2025" /><button>Mostrar</button></div></label>
-              <div className="login-options"><label><input type="checkbox" defaultChecked /> Recordarme</label><button>Olvidé mi contraseña</button></div>
-              <Button wide onClick={() => enter("proveedor")}>Ingresar a ProvCons</Button>
+              <label>Correo corporativo<input type="email" placeholder="nombre@empresa.com" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} disabled={loading} /></label>
+              <label>Contraseña<div className="password-field"><input type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} disabled={loading} /><button type="button">Mostrar</button></div></label>
+              <div className="login-options"><label><input type="checkbox" defaultChecked /> Recordarme</label><button type="button">Olvidé mi contraseña</button></div>
+              <Button wide onClick={handleLogin} disabled={loading}>{loading ? "Ingresando..." : "Ingresar a ProvCons"}</Button>
               <div className="auth-divider"><span /> o <span /></div>
-              <button className="create-account" onClick={() => setStep("register")}>Crear una organización nueva <Icon name="arrow" size={15} /></button>
+              <button className="create-account" onClick={() => { setStep("register"); setError(""); }} disabled={loading}>Crear una organización nueva <Icon name="arrow" size={15} /></button>
             </>
           ) : (
             <>
-              <label>Nombre de la organización<input placeholder="Ej. Materiales del Norte S.A.S." /></label>
-              <label>NIT<input placeholder="900.123.456-7" /></label>
+              <label>Nombre de la organización<input placeholder="Ej. Materiales del Norte S.A.S." value={signupOrgName} onChange={(e) => setSignupOrgName(e.target.value)} disabled={loading} /></label>
+              <label>NIT<input placeholder="900.123.456-7" value={signupTaxId} onChange={(e) => setSignupTaxId(e.target.value)} disabled={loading} /></label>
               <fieldset>
                 <legend>¿Qué tipo de organización eres?</legend>
                 <div className="role-options">
-                  <button className={authRole === "constructora" ? "selected" : ""} onClick={() => setAuthRole("constructora")}><Icon name="building" /><span><strong>Constructora</strong><small>Busco materiales y proveedores</small></span></button>
-                  <button className={authRole === "proveedor" ? "selected" : ""} onClick={() => setAuthRole("proveedor")}><Icon name="box" /><span><strong>Proveedor</strong><small>Ofrezco materiales e inventario</small></span></button>
+                  <button className={authRole === "constructora" ? "selected" : ""} onClick={() => setAuthRole("constructora")} disabled={loading} type="button"><Icon name="building" /><span><strong>Constructora</strong><small>Busco materiales y proveedores</small></span></button>
+                  <button className={authRole === "proveedor" ? "selected" : ""} onClick={() => setAuthRole("proveedor")} disabled={loading} type="button"><Icon name="box" /><span><strong>Proveedor</strong><small>Ofrezco materiales e inventario</small></span></button>
                 </div>
               </fieldset>
-              <label>Tu correo de trabajo<input type="email" placeholder="nombre@empresa.com" /></label>
-              <Button wide icon="arrow" onClick={() => setStep("ready")}>Crear organización y continuar</Button>
+              <label>Tu nombre completo<input placeholder="Ej. Juan Pérez" value={signupFullName} onChange={(e) => setSignupFullName(e.target.value)} disabled={loading} /></label>
+              <label>Tu correo de trabajo<input type="email" placeholder="nombre@empresa.com" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)} disabled={loading} /></label>
+              <label>Contraseña<input type="password" placeholder="Mínimo 8 caracteres" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} disabled={loading} /></label>
+              <Button wide icon="arrow" onClick={handleSignup} disabled={loading}>{loading ? "Creando..." : "Crear organización y continuar"}</Button>
               <small className="legal">Al continuar aceptas los términos de servicio y la política de privacidad.</small>
             </>
           )}
