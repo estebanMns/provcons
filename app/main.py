@@ -38,10 +38,10 @@ app = FastAPI(
     openapi_url="/openapi.json" if _is_dev else None,
 )
 
-app.include_router(users_router)
-app.include_router(documents_ai_router)
-app.include_router(matching_router)
-app.include_router(transactions_router)
+app.include_router(users_router, prefix="/api")
+app.include_router(documents_ai_router, prefix="/api")
+app.include_router(matching_router, prefix="/api")
+app.include_router(transactions_router, prefix="/api")
 
 
 @app.middleware("http")
