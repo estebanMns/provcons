@@ -109,7 +109,7 @@ export function Quotations() {
           <h1>Cotizaciones</h1>
           <p>Aquí aparecerán tus cotizaciones y oportunidades de proveedores.</p>
         </div>
-        {constructora && <Button variant="secondary" icon="plus" onClick={() => setStage("upload")}>Nueva solicitud</Button>}
+        {constructora && <Button variant="secondary" icon="plus" onClick={() => setStage("upload")}>Subir cotización</Button>}
       </section>
       <section className="card" style={{ padding: "3rem", textAlign: "center" }}>
         <Icon name="file" size={48} style={{ opacity: 0.5, marginBottom: "1rem" }} />
