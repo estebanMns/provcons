@@ -15,12 +15,14 @@ export function Sidebar({ mobileOpen, closeMobile }: SidebarProps) {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    getMe().catch(() => {
-      clearToken();
-      router.push("/login");
-    }).then((userData) => {
-      if (userData) setUser(userData);
-    });
+    getMe()
+      .then((userData) => {
+        setUser(userData);
+      })
+      .catch(() => {
+        clearToken();
+        router.push("/login");
+      });
   }, [router]);
 
   // Filtrar items según el rol
