@@ -1,5 +1,5 @@
 from app.modules.users.repository import UserRepository, OrganizationRepository
-from app.modules.users.models import User, UserRole
+from app.modules.users.models import User, UserRole, Organization, OrgType
 from app.core.exceptions import ConflictError, NotFoundError, UnauthorizedError
 from app.core.security import create_access_token
 from app.core.audit import AuditService
@@ -56,3 +56,38 @@ class UserService:
             subject=user.id,
             extra_claims={"organization_id": user.organization_id, "role": user.role.value},
         )
+
+    async def signup_with_organization(
+        self, organization_name: str, organization_type: OrgType, tax_id: str | None,
+        email: str, raw_password: str, full_name: str,
+    ) -> User:
+        """Onboarding: crea la organización + primer usuario (admin) en una sola operación."""
+        existing_user = await self.user_repo.get_by_email(email)
+        if existing_user is not None:
+            raise ConflictError("Ya existe un usuario con ese correo")
+
+        if tax_id:
+            existing_org = await self.org_repo.get_by_tax_id(tax_id)
+            if existing_org is not None:
+                raise ConflictError("Ya existe una organización con ese NIT")
+
+        org = Organization(name=organization_name, type=organization_type, tax_id=tax_id)
+        saved_org = await self.org_repo.save(org)
+
+        user = User(
+            email=email, full_name=full_name, role=UserRole.admin,
+            organization_id=saved_org.id,
+        )
+        user.set_password(raw_password)
+        saved_user = await self.user_repo.save(user)
+
+        logger.info(
+            "Signup completado: user_id=%s email=%s org_id=%s org_type=%s",
+            saved_user.id, saved_user.email, saved_org.id, organization_type,
+        )
+        await self.audit.record(
+            action="organization.created", resource_type="Organization", resource_id=saved_org.id,
+            actor_user_id=saved_user.id, actor_organization_id=saved_org.id,
+        )
+        saved_user.organization = saved_org
+        return saved_user

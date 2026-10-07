@@ -3,11 +3,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.modules.users.repository import UserRepository, OrganizationRepository
 from app.modules.users.service import UserService
-from app.modules.users.schemas import UserCreate, UserOut, LoginRequest, TokenResponse
+from app.modules.users.schemas import (
+    SignupRequest, UserCreate, UserOut, LoginRequest, TokenResponse,
+    MeOut, OrganizationCreate, OrganizationOut,
+)
 from app.dependencies.auth import get_current_user
 from app.modules.users.models import User
 from app.core.audit import AuditService, AuditRepository
-from app.modules.users.schemas import OrganizationCreate, OrganizationOut
 
 
 router = APIRouter(prefix="/users", tags=["Usuarios y auth"])
@@ -40,12 +42,22 @@ async def create_organization(
     return await org_repo.save(org)
 
 
+@router.post("/signup", response_model=MeOut)
+async def signup(payload: SignupRequest, service: UserService = Depends(get_user_service)):
+    """Onboarding público: crea organización + primer usuario (admin) en una operación."""
+    user = await service.signup_with_organization(
+        payload.organization_name, payload.organization_type, payload.tax_id,
+        payload.email, payload.password, payload.full_name,
+    )
+    return user
+
+
 @router.post("/login", response_model=TokenResponse)
 async def login(payload: LoginRequest, service: UserService = Depends(get_user_service)):
     token = await service.login(payload.email, payload.password)
     return TokenResponse(access_token=token)
 
 
-@router.get("/me", response_model=UserOut)
+@router.get("/me", response_model=MeOut)
 async def me(current_user: User = Depends(get_current_user)):
     return current_user

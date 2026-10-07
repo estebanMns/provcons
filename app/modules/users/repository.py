@@ -30,6 +30,10 @@ class OrganizationRepository:
         result = await self.db.execute(select(Organization).where(Organization.id == org_id))
         return result.scalar_one_or_none()
 
+    async def get_by_tax_id(self, tax_id: str) -> Organization | None:
+        result = await self.db.execute(select(Organization).where(Organization.tax_id == tax_id))
+        return result.scalar_one_or_none()
+
     async def save(self, org: Organization) -> Organization:
         self.db.add(org)
         await self.db.commit()
