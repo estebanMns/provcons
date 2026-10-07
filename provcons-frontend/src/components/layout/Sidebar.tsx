@@ -53,7 +53,7 @@ export function Sidebar({ mobileOpen, closeMobile }: SidebarProps) {
             className={pathname === viewPaths[item.id] ? "active" : ""}
             onClick={() => { router.push(viewPaths[item.id]); closeMobile(); }}
           >
-            <Icon name={item.icon} /><span>{item.label}</span>{item.id === "ordenes" && <em>2</em>}
+            <Icon name={item.icon} /><span>{item.label}</span>
           </button>
         ))}
       </nav>
