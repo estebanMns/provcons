@@ -4,7 +4,7 @@ from app.db.session import get_db
 from app.modules.users.repository import UserRepository, OrganizationRepository
 from app.modules.users.service import UserService
 from app.modules.users.schemas import (
-    SignupRequest, UserCreate, UserOut, LoginRequest, TokenResponse,
+    SignupRequest, UserOut, LoginRequest, TokenResponse,
     MeOut, OrganizationCreate, OrganizationOut,
 )
 from app.dependencies.auth import get_current_user
@@ -18,28 +18,6 @@ router = APIRouter(prefix="/users", tags=["Usuarios y auth"])
 def get_user_service(db: AsyncSession = Depends(get_db)) -> UserService:
     audit = AuditService(AuditRepository(db))
     return UserService(UserRepository(db), OrganizationRepository(db), audit)
-
-
-@router.post("/register", response_model=UserOut)
-async def register(payload: UserCreate, service: UserService = Depends(get_user_service)):
-    user = await service.register_user(
-        payload.organization_id, payload.email, payload.password,
-        payload.full_name, payload.role,
-    )
-    return user
-
-@router.post("/organizations", response_model=OrganizationOut)
-async def create_organization(
-    payload: OrganizationCreate,
-    db: AsyncSession = Depends(get_db),
-):
-    """Sin autenticación a propósito: es el primer paso del onboarding —
-    una constructora o proveedor se registra en la plataforma creando su
-    organización antes de tener ningún usuario todavía."""
-    org_repo = OrganizationRepository(db)
-    from app.modules.users.models import Organization
-    org = Organization(name=payload.name, type=payload.type, tax_id=payload.tax_id)
-    return await org_repo.save(org)
 
 
 @router.post("/signup", response_model=MeOut)
