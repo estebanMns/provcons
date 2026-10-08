@@ -139,3 +139,38 @@ export async function uploadQuotationFile(
 
   return response.json();
 }
+
+export interface InventoryUploadResult {
+  provider_org_id: number;
+  items_extracted: number;
+  items_saved: number;
+  file_name: string;
+  saved_items: any[];
+}
+
+export async function uploadInventoryFile(
+  file: File,
+  orgId: number,
+): Promise<InventoryUploadResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const token = getToken();
+  const headers = new Headers();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const response = await fetch(`${API_BASE}/documents/inventory/${orgId}/upload`, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || `Upload error: ${response.status}`);
+  }
+
+  return response.json();
+}

@@ -37,6 +37,7 @@ class QuotationItem(Base, TimestampMixin):
     material_name: Mapped[str] = mapped_column(String(200))
     quantity: Mapped[float] = mapped_column(Float)
     unit: Mapped[str] = mapped_column(String(20))
+    unit_price: Mapped[float] = mapped_column(Float, nullable=True, default=None)
     specs: Mapped[dict] = mapped_column(JSONB, default=dict)
 
     quotation: Mapped["Quotation"] = relationship(back_populates="items")

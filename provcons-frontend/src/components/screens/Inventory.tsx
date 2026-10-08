@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
-import { getMe } from "@/lib/api";
-import type { User } from "@/lib/api";
+import { getMe, uploadInventoryFile } from "@/lib/api";
+import type { User, InventoryUploadResult } from "@/lib/api";
 
 type Stage = "idle" | "processing" | "review" | "done";
 
@@ -16,6 +16,8 @@ export function Inventory() {
   const [stage, setStage] = useState<Stage>("idle");
   const [items, setItems] = useState<any[]>([]);
   const [fileName, setFileName] = useState<string>("");
+  const [uploadResult, setUploadResult] = useState<InventoryUploadResult | null>(null);
+  const [error, setError] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const timer = useRef<number | null>(null);
 
@@ -36,16 +38,34 @@ export function Inventory() {
     return null;
   }
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (file && user.organization) {
       setFileName(file.name);
-      process();
+      await processInventoryFile(file);
     }
   };
 
   const handleSelectFile = () => {
     fileInputRef.current?.click();
+  };
+
+  const processInventoryFile = async (file: File) => {
+    setStage("processing");
+    setError("");
+
+    try {
+      const result = await uploadInventoryFile(file, user.organization!.id);
+      setUploadResult(result);
+      setItems(result.saved_items || []);
+
+      // Simular tiempo de procesamiento
+      if (timer.current) window.clearTimeout(timer.current);
+      timer.current = window.setTimeout(() => setStage("done"), 1500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al procesar el inventario");
+      setStage("idle");
+    }
   };
 
   const process = () => {
@@ -103,52 +123,60 @@ export function Inventory() {
     <div className="page">
       <section className="page-heading">
         <div>
-          <p className="eyebrow">INVENTARIO / REVISIÓN</p>
-          <h1>{stage === "review" ? "Revisa lo que encontramos" : "Inventario actualizado"}</h1>
-          <p>{stage === "review" ? "Confirma o corrige los datos antes de incorporarlos a tu inventario." : "Tu catálogo está listo para encontrar nuevas oportunidades."}</p>
+          <p className="eyebrow">INVENTARIO</p>
+          <h1>{stage === "done" ? "Inventario actualizado" : "Mi catálogo"}</h1>
+          <p>{stage === "done" ? "Tu catálogo está listo para encontrar nuevas oportunidades." : "Sube tus productos para que los clientes puedan encontrarte."}</p>
         </div>
         {stage === "done" && <Button icon="upload" onClick={() => setStage("idle")}>Subir otro archivo</Button>}
       </section>
-      {stage === "review" && (
+      {error && (
+        <section className="card" style={{ padding: "1rem", marginBottom: "1rem", background: "#fee", borderColor: "#fcc" }}>
+          <p style={{ color: "#c00", margin: 0 }}>❌ Error: {error}</p>
+        </section>
+      )}
+      {stage === "done" && uploadResult && (
         <div className="review-summary">
-          <div className="review-ai"><Icon name="spark" /><div><strong>La IA encontró 48 productos</strong><p>44 tienen alta confianza y 4 necesitan una revisión rápida.</p></div></div>
-          <div className="review-count"><span><b>44</b> Listos</span><span><b>4</b> Por revisar</span></div>
+          <div className="review-ai"><Icon name="spark" /><div><strong>La IA encontró {uploadResult.items_extracted} productos</strong><p>Se guardaron {uploadResult.items_saved} productos en tu inventario.</p></div></div>
+          <div className="review-count"><span><b>{uploadResult.items_saved}</b> Guardados</span><span><b>{uploadResult.items_extracted}</b> Totales</span></div>
         </div>
       )}
-      <section className="card inventory-card">
-        <div className="table-tools">
-          <div className="search-field"><Icon name="search" size={18} /><input placeholder="Buscar producto o código" /></div>
-          <div><button>Todos <b>{stage === "review" ? "48" : "248"}</b></button><button>Por revisar <b>4</b></button></div>
-        </div>
-        <div className="table-scroll">
-          <table>
-            <thead><tr><th>Producto</th><th>Código</th><th>Disponible</th><th>Unidad</th><th>Precio unitario</th><th>Lectura IA</th></tr></thead>
-            <tbody>
-              {items.map((item, i) => (
-                <tr key={item.sku}>
-                  <td><input value={item.name} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} /></td>
-                  <td>{item.sku}</td>
-                  <td><input className="small-input" value={item.qty} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, qty: Number(e.target.value) || 0 } : x)))} /></td>
-                  <td>{item.unit}</td>
-                  <td>$ {item.price}</td>
-                  <td><Badge tone={item.confidence > 90 ? "success" : "warning"}>{item.confidence > 90 ? <Icon name="check" size={12} /> : <Icon name="warning" size={12} />} {item.confidence}%</Badge></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {stage === "review" ? (
-          <div className="card-actions">
-            <Button variant="ghost">Guardar borrador</Button>
-            <div><Button variant="secondary" onClick={() => setStage("idle")}>Volver</Button><Button icon="check" onClick={() => setStage("done")}>Confirmar 48 productos</Button></div>
+      {stage !== "idle" && stage !== "processing" && (
+        <section className="card inventory-card">
+          <div className="table-tools">
+            <div className="search-field"><Icon name="search" size={18} /><input placeholder="Buscar producto" /></div>
+            <div><button>Todos <b>{items.length}</b></button></div>
           </div>
-        ) : (
-          <div className="success-footer">
-            <div><Icon name="check" /><span><strong>Catálogo publicado correctamente</strong><small>Última actualización: hoy, 10:42 a. m.</small></span></div>
-            <Button icon="arrow" onClick={() => router.push("/cotizaciones")}>Ver oportunidades</Button>
+          <div className="table-scroll">
+            <table>
+              <thead><tr><th>Producto</th><th>Disponible</th><th>Unidad</th><th>Precio unitario</th></tr></thead>
+              <tbody>
+                {items.length > 0 ? (
+                  items.map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.material_name}</td>
+                      <td>{item.quantity_available}</td>
+                      <td>{item.unit}</td>
+                      <td>$ {item.unit_price || "N/A"}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: "center", padding: "2rem", color: "var(--text-secondary)" }}>
+                      No hay productos en el inventario
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-        )}
-      </section>
+          {stage === "done" && (
+            <div className="success-footer">
+              <div><Icon name="check" /><span><strong>Catálogo publicado correctamente</strong><small>Última actualización: hace unos momentos</small></span></div>
+              <Button icon="arrow" onClick={() => router.push("/dashboard")}>Volver al dashboard</Button>
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }

@@ -7,6 +7,7 @@ class QuotationItemCreate(BaseModel):
     material_name: str = Field(min_length=2, max_length=200)
     quantity: float = Field(gt=0)
     unit: str = Field(min_length=1, max_length=20)
+    unit_price: float | None = Field(default=None, ge=0)
     specs: dict = Field(default_factory=dict)
 
 
