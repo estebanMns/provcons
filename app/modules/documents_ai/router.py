@@ -155,5 +155,5 @@ async def upload_inventory_file(
         "items_extracted": len(items_data),
         "items_saved": len(saved_items),
         "file_name": file.filename,
-        "saved_items": saved_items,
+        "saved_items": [InventoryItemOut.model_validate(item).model_dump(mode="json") for item in saved_items],
     }

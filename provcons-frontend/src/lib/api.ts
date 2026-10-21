@@ -1,4 +1,9 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+// Sin NEXT_PUBLIC_API_URL, la API usa el mismo host que la página (localhost o la IP de la red local).
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ||
+  (typeof window !== "undefined"
+    ? `http://${window.location.hostname}:8000/api`
+    : "http://localhost:8000/api");
 const TOKEN_KEY = "auth_token";
 
 export interface SignupPayload {
@@ -104,12 +109,25 @@ export async function getMe(): Promise<User> {
   return fetchAPI<User>("/users/me");
 }
 
+export interface MatchProvider {
+  id: number;
+  provider_org_id: number;
+  score: number;
+  criteria_breakdown?: {
+    disponibilidad?: number;
+    precio?: number;
+    logistica?: number;
+    confiabilidad?: number;
+    justificacion?: string;
+  };
+}
+
 export interface QuotationResult {
   quotation_id: number;
   title: string;
   items_extracted: number;
   matches_found: number;
-  top_providers: any[];
+  top_providers: MatchProvider[];
 }
 
 export async function uploadQuotationFile(
@@ -140,12 +158,24 @@ export async function uploadQuotationFile(
   return response.json();
 }
 
+export interface InventoryItem {
+  id: number;
+  material_name: string;
+  quantity_available: number;
+  unit: string;
+  unit_price: number | string | null;
+}
+
 export interface InventoryUploadResult {
   provider_org_id: number;
   items_extracted: number;
   items_saved: number;
   file_name: string;
-  saved_items: any[];
+  saved_items: InventoryItem[];
+}
+
+export async function getInventory(orgId: number): Promise<InventoryItem[]> {
+  return fetchAPI<InventoryItem[]>(`/documents/inventory/${orgId}`);
 }
 
 export async function uploadInventoryFile(

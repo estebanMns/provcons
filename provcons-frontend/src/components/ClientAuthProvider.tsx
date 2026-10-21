@@ -1,14 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { getToken } from "@/lib/api";
 
 export function ClientAuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [isChecking, setIsChecking] = useState(true);
-
   useEffect(() => {
     const token = getToken();
     const publicRoutes = ["/login"];
@@ -19,8 +17,6 @@ export function ClientAuthProvider({ children }: { children: React.ReactNode }) 
     } else if (token && isPublicRoute) {
       router.replace("/dashboard");
     }
-
-    setIsChecking(false);
   }, [pathname, router]);
 
   // Verificar cambios de token cada segundo para detectar logout

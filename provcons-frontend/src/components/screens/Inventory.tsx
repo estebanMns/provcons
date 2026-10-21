@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
-import { getMe, uploadInventoryFile } from "@/lib/api";
-import type { User, InventoryUploadResult } from "@/lib/api";
+import { getInventory, getMe, uploadInventoryFile } from "@/lib/api";
+import type { User, InventoryItem, InventoryUploadResult } from "@/lib/api";
 
 type Stage = "idle" | "processing" | "review" | "done";
 
@@ -14,7 +14,7 @@ export function Inventory() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [stage, setStage] = useState<Stage>("idle");
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<InventoryItem[]>([]);
   const [fileName, setFileName] = useState<string>("");
   const [uploadResult, setUploadResult] = useState<InventoryUploadResult | null>(null);
   const [error, setError] = useState<string>("");
@@ -27,7 +27,14 @@ export function Inventory() {
         setUser(userData);
         if (userData.organization?.type !== "proveedor") {
           router.push("/dashboard");
+          return;
         }
+        getInventory(userData.organization.id).then((saved) => {
+          if (saved.length > 0) {
+            setItems(saved);
+            setStage("review");
+          }
+        });
       })
       .catch(() => {
         router.push("/login");
@@ -127,7 +134,7 @@ export function Inventory() {
           <h1>{stage === "done" ? "Inventario actualizado" : "Mi catálogo"}</h1>
           <p>{stage === "done" ? "Tu catálogo está listo para encontrar nuevas oportunidades." : "Sube tus productos para que los clientes puedan encontrarte."}</p>
         </div>
-        {stage === "done" && <Button icon="upload" onClick={() => setStage("idle")}>Subir otro archivo</Button>}
+        <Button icon="upload" onClick={() => setStage("idle")}>Subir otro archivo</Button>
       </section>
       {error && (
         <section className="card" style={{ padding: "1rem", marginBottom: "1rem", background: "#fee", borderColor: "#fcc" }}>
@@ -140,43 +147,41 @@ export function Inventory() {
           <div className="review-count"><span><b>{uploadResult.items_saved}</b> Guardados</span><span><b>{uploadResult.items_extracted}</b> Totales</span></div>
         </div>
       )}
-      {stage !== "idle" && stage !== "processing" && (
-        <section className="card inventory-card">
-          <div className="table-tools">
-            <div className="search-field"><Icon name="search" size={18} /><input placeholder="Buscar producto" /></div>
-            <div><button>Todos <b>{items.length}</b></button></div>
-          </div>
-          <div className="table-scroll">
-            <table>
-              <thead><tr><th>Producto</th><th>Disponible</th><th>Unidad</th><th>Precio unitario</th></tr></thead>
-              <tbody>
-                {items.length > 0 ? (
-                  items.map((item) => (
-                    <tr key={item.id}>
-                      <td>{item.material_name}</td>
-                      <td>{item.quantity_available}</td>
-                      <td>{item.unit}</td>
-                      <td>$ {item.unit_price || "N/A"}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={4} style={{ textAlign: "center", padding: "2rem", color: "var(--text-secondary)" }}>
-                      No hay productos en el inventario
-                    </td>
+      <section className="card inventory-card">
+        <div className="table-tools">
+          <div className="search-field"><Icon name="search" size={18} /><input placeholder="Buscar producto" /></div>
+          <div><button>Todos <b>{items.length}</b></button></div>
+        </div>
+        <div className="table-scroll">
+          <table>
+            <thead><tr><th>Producto</th><th>Disponible</th><th>Unidad</th><th>Precio unitario</th></tr></thead>
+            <tbody>
+              {items.length > 0 ? (
+                items.map((item) => (
+                  <tr key={item.id}>
+                    <td>{item.material_name}</td>
+                    <td>{item.quantity_available}</td>
+                    <td>{item.unit}</td>
+                    <td>$ {item.unit_price || "N/A"}</td>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4} style={{ textAlign: "center", padding: "2rem", color: "var(--text-secondary)" }}>
+                    No hay productos en el inventario
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {stage === "done" && (
+          <div className="success-footer">
+            <div><Icon name="check" /><span><strong>Catálogo publicado correctamente</strong><small>Última actualización: hace unos momentos</small></span></div>
+            <Button icon="arrow" onClick={() => router.push("/dashboard")}>Volver al dashboard</Button>
           </div>
-          {stage === "done" && (
-            <div className="success-footer">
-              <div><Icon name="check" /><span><strong>Catálogo publicado correctamente</strong><small>Última actualización: hace unos momentos</small></span></div>
-              <Button icon="arrow" onClick={() => router.push("/dashboard")}>Volver al dashboard</Button>
-            </div>
-          )}
-        </section>
-      )}
+        )}
+      </section>
     </div>
   );
 }
