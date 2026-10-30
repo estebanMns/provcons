@@ -78,7 +78,7 @@ export function Topbar({ openMobile }: { openMobile: () => void }) {
             <div className="search-results">
               {searchQuery ? (
                 <p style={{ padding: "1rem", color: "var(--text-secondary)" }}>
-                  No se encontraron resultados para "{searchQuery}"
+                  No se encontraron resultados para &ldquo;{searchQuery}&rdquo;
                 </p>
               ) : (
                 <p style={{ padding: "1rem", color: "var(--text-secondary)" }}>
