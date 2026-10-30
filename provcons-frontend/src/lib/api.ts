@@ -104,12 +104,72 @@ export async function getMe(): Promise<User> {
   return fetchAPI<User>("/users/me");
 }
 
+export interface OfferCriteria {
+  compatibilidad: number;
+  disponibilidad: number;
+  precio: number;
+  unidad_compatible: boolean;
+  stock_suficiente: boolean;
+  vs_presupuesto?: number;
+}
+
+export interface ProviderOffer {
+  match_id: number;
+  provider_org_id: number;
+  provider_name: string;
+  material_name: string;
+  unit: string;
+  unit_price: number | null;
+  quantity_available: number;
+  subtotal: number | null;
+  score: number;
+  criteria: OfferCriteria;
+  is_cheapest: boolean;
+  is_best: boolean;
+}
+
+export interface ItemComparison {
+  item_id: number;
+  material_name: string;
+  quantity: number;
+  unit: string;
+  budget_unit_price: number | null;
+  offers: ProviderOffer[];
+}
+
+export interface ProviderRanking {
+  provider_org_id: number;
+  provider_name: string;
+  score: number;
+  coverage: number;
+  items_covered: number;
+  items_full_stock: number;
+  cheapest_items: number;
+  unit_mismatches: number;
+  total_cost: number;
+  justificacion: string;
+  match_ids: number[];
+}
+
+export interface BestCombination {
+  items: { item_id: number; material_name: string; provider_org_id: number; provider_name: string; unit_price: number | null; subtotal: number | null }[];
+  total_cost: number;
+  items_covered: number;
+  providers_count: number;
+  savings_vs_recommendation: number | null;
+}
+
 export interface QuotationResult {
   quotation_id: number;
   title: string;
   items_extracted: number;
   matches_found: number;
-  top_providers: any[];
+  items_total: number;
+  items_without_offers: number;
+  items: ItemComparison[];
+  providers: ProviderRanking[];
+  recommendation: ProviderRanking | null;
+  best_combination: BestCombination;
 }
 
 export async function uploadQuotationFile(

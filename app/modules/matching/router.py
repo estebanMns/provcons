@@ -1,15 +1,15 @@
-from fastapi import APIRouter, Depends, UploadFile, File
+from fastapi import APIRouter, Depends, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.modules.matching.repository import QuotationRepository, MatchRepository
 from app.modules.matching.service import MatchingService
-from app.modules.matching.scoring import SimpleScoringStrategy
-from app.modules.matching.schemas import QuotationCreate, QuotationOut, MatchOut
+from app.modules.matching.scoring import ComparativeScoringStrategy
+from app.modules.matching.schemas import QuotationCreate, QuotationOut, QuotationComparisonOut, QuotationUploadOut
 from app.dependencies.auth import get_current_user
 from app.modules.users.models import User
 from app.core.audit import AuditService, AuditRepository
+from app.core.exceptions import ValidationError
 from app.infrastructure.ai_client import AIClient
-from pydantic import BaseModel
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -21,9 +21,37 @@ def get_matching_service(db: AsyncSession = Depends(get_db)) -> MatchingService:
     audit = AuditService(AuditRepository(db))
     return MatchingService(
         QuotationRepository(db), MatchRepository(db),
-        scoring_strategy=SimpleScoringStrategy(),  # aquí se cambia por MLScoringStrategy en el futuro
+        scoring_strategy=ComparativeScoringStrategy(),
         audit=audit,
     )
+
+
+def _clean_extracted_items(raw_items: list) -> list[dict]:
+    """La IA puede devolver filas incompletas (sin cantidad, con null). Solo se
+    aceptan las que tienen nombre y una cantidad positiva; no se inventan datos."""
+    cleaned = []
+    for raw in raw_items or []:
+        if not isinstance(raw, dict):
+            continue
+        name = str(raw.get("material_name") or "").strip()
+        try:
+            quantity = float(raw.get("quantity") or 0)
+        except (TypeError, ValueError):
+            quantity = 0
+        if len(name) < 2 or quantity <= 0:
+            continue
+        try:
+            unit_price = float(raw["unit_price"]) if raw.get("unit_price") is not None else None
+        except (TypeError, ValueError):
+            unit_price = None
+        cleaned.append({
+            "material_name": name[:200],
+            "quantity": quantity,
+            "unit": str(raw.get("unit") or "")[:20],
+            "unit_price": unit_price,
+            "specs": raw.get("specs") if isinstance(raw.get("specs"), dict) else {},
+        })
+    return cleaned
 
 
 @router.post("/quotations", response_model=QuotationOut)
@@ -39,20 +67,25 @@ async def create_quotation(
     )
 
 
-@router.post("/quotations/{quotation_id}/run", response_model=list[MatchOut])
+@router.post("/quotations/{quotation_id}/run", response_model=QuotationComparisonOut)
 async def run_matching(
     quotation_id: int,
     service: MatchingService = Depends(get_matching_service),
     current_user: User = Depends(get_current_user),
 ):
-    return await service.run_matching(quotation_id, actor_user_id=current_user.id)
+    """Busca proveedores para cada material de la cotización y los compara
+    entre sí (cobertura, stock, precio). Se puede ejecutar de nuevo cuando
+    cambie el inventario de los proveedores."""
+    return await service.run_matching(
+        quotation_id, actor_user_id=current_user.id, actor_org_id=current_user.organization_id,
+    )
 
 
-@router.post("/quotations/upload", response_model=dict)
+@router.post("/quotations/upload", response_model=QuotationUploadOut)
 async def upload_quotation_file(
-    title: str,
+    title: str = Form(""),
     file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
+    service: MatchingService = Depends(get_matching_service),
     current_user: User = Depends(get_current_user),
 ):
     """Endpoint que procesa un archivo de cotización (PDF, Excel o imagen) con IA,
@@ -75,7 +108,8 @@ async def upload_quotation_file(
     logger.info("Procesando archivo de cotización: %s (%s bytes, tipo: %s)",
                 file.filename, len(file_content), mime_type)
 
-    # Usar IA para extraer materiales del archivo
+    # Usar IA para extraer materiales del archivo. Si la IA falla, el
+    # AIServiceError llega al usuario en vez de crear una cotización vacía.
     ai_client = AIClient()
     system_instruction = """Eres un asistente que extrae información de materiales de cotizaciones.
     Devuelve ÚNICAMENTE un JSON con esta forma exacta:
@@ -89,25 +123,17 @@ async def upload_quotation_file(
           "specs": object
         }
       ]
-    }"""
+    }
+    Si no puedes determinar un valor con certeza, usa null en ese campo — nunca inventes datos."""
 
-    try:
-        extracted_data = await ai_client.generate_json_from_file(
-            file_bytes=file_content,
-            mime_type=mime_type,
-            system_instruction=system_instruction,
-        )
-        items_data = extracted_data.get("items", [])
-    except Exception as e:
-        logger.error("Error procesando archivo con IA: %s", str(e))
-        items_data = []
-
-    # Crear cotización
-    service = MatchingService(
-        QuotationRepository(db), MatchRepository(db),
-        scoring_strategy=SimpleScoringStrategy(),
-        audit=AuditService(AuditRepository(db)),
+    extracted_data = await ai_client.generate_json_from_file(
+        file_bytes=file_content,
+        mime_type=mime_type,
+        system_instruction=system_instruction,
     )
+    items_data = _clean_extracted_items((extracted_data or {}).get("items", []))
+    if not items_data:
+        raise ValidationError("No se encontraron materiales con cantidad en el archivo")
 
     quotation = await service.create_quotation(
         constructora_org_id=current_user.organization_id,
@@ -117,15 +143,11 @@ async def upload_quotation_file(
     )
 
     # Ejecutar matching automático
-    matches = await service.run_matching(quotation.id, actor_user_id=current_user.id)
+    comparison = await service.run_matching(
+        quotation.id, actor_user_id=current_user.id, actor_org_id=current_user.organization_id,
+    )
 
     logger.info("Cotización procesada: id=%s, items=%s, matches=%s",
-                quotation.id, len(items_data), len(matches))
+                quotation.id, len(items_data), comparison["matches_found"])
 
-    return {
-        "quotation_id": quotation.id,
-        "title": quotation.title,
-        "items_extracted": len(items_data),
-        "matches_found": len(matches),
-        "top_providers": matches[:5],  # Top 5 proveedores
-    }
+    return {**comparison, "items_extracted": len(items_data)}

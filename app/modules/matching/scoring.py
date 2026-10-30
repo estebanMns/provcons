@@ -1,130 +1,76 @@
 from abc import ABC, abstractmethod
-import asyncio
+from dataclasses import dataclass
 from app.modules.matching.models import QuotationItem
+from app.modules.matching.text_matching import units_compatible
 from app.modules.documents_ai.models import ProviderInventoryItem
-from app.infrastructure.ai_client import AIClient
-from app.core.logging import get_logger
 
-logger = get_logger(__name__)
+
+@dataclass(frozen=True)
+class OfferContext:
+    """Lo que el scoring necesita saber además del par (pedido, oferta):
+    qué tan parecido es el material y el mejor precio entre TODAS las ofertas
+    para ese mismo ítem, para poder comparar un proveedor contra los demás."""
+    similarity: float
+    best_unit_price: float | None
 
 
 class ScoringStrategy(ABC):
     """Contrato que cualquier algoritmo de scoring debe cumplir."""
 
     @abstractmethod
-    def calculate(self, item: QuotationItem, inventory: ProviderInventoryItem) -> tuple[float, dict]:
+    def calculate(
+        self, item: QuotationItem, inventory: ProviderInventoryItem, context: OfferContext,
+    ) -> tuple[float, dict]:
         raise NotImplementedError
 
 
-class SimpleScoringStrategy(ScoringStrategy):
-    """Primera versión: reglas fijas. Se reemplaza por IA real (MLScoringStrategy)
-    más adelante, sin tocar MatchingService ni el router."""
+class ComparativeScoringStrategy(ScoringStrategy):
+    """Califica cada oferta de 0 a 1 con criterios medibles y explicables:
+    - compatibilidad: qué tan parecido es el material ofrecido al pedido
+    - disponibilidad: qué parte de la cantidad pedida tiene en stock
+    - precio: qué tan cerca está del precio más bajo ofrecido para ese ítem
+    Si la unidad no coincide (m3 vs bulto) la oferta se penaliza, porque los
+    precios no son comparables directamente."""
 
-    def calculate(self, item: QuotationItem, inventory: ProviderInventoryItem) -> tuple[float, dict]:
-        breakdown = {}
+    WEIGHTS = {"compatibilidad": 0.35, "disponibilidad": 0.35, "precio": 0.30}
+    UNIT_MISMATCH_PENALTY = 0.6
+    UNKNOWN_PRICE_SCORE = 0.5
 
-        stock_score = 1.0 if inventory.quantity_available >= item.quantity else 0.3
-        breakdown["stock_score"] = stock_score
+    def calculate(
+        self, item: QuotationItem, inventory: ProviderInventoryItem, context: OfferContext,
+    ) -> tuple[float, dict]:
+        quantity_available = inventory.quantity_available or 0
+        disponibilidad = min(quantity_available / item.quantity, 1.0) if item.quantity else 0.0
 
-        price_score = 0.8
-        breakdown["price_score"] = price_score
+        unit_price = inventory.unit_price
+        if unit_price and unit_price > 0 and context.best_unit_price:
+            precio = context.best_unit_price / unit_price
+        else:
+            precio = self.UNKNOWN_PRICE_SCORE
 
-        final_score = round((stock_score * 0.6) + (price_score * 0.4), 2)
-        breakdown["final_score"] = final_score
+        unidad_compatible = units_compatible(item.unit, inventory.unit)
+
+        final_score = (
+            self.WEIGHTS["compatibilidad"] * context.similarity
+            + self.WEIGHTS["disponibilidad"] * disponibilidad
+            + self.WEIGHTS["precio"] * precio
+        )
+        if not unidad_compatible:
+            final_score *= self.UNIT_MISMATCH_PENALTY
+        final_score = round(final_score, 3)
+
+        breakdown = {
+            "compatibilidad": round(context.similarity, 3),
+            "disponibilidad": round(disponibilidad, 3),
+            "precio": round(precio, 3),
+            "unidad_compatible": unidad_compatible,
+            "stock_suficiente": quantity_available >= item.quantity,
+            "unit_price": unit_price,
+            "subtotal": round(unit_price * item.quantity, 2) if unit_price else None,
+            "final_score": final_score,
+        }
+        if item.unit_price and unit_price:
+            # Positivo = más caro que el presupuesto de la constructora
+            breakdown["vs_presupuesto"] = round((unit_price - item.unit_price) / item.unit_price, 3)
 
         return final_score, breakdown
-
-
-class AIScoreStrategy(ScoringStrategy):
-    """Estrategia de scoring usando IA de Gemini para análisis inteligente
-    de disponibilidad, precio, logística e historial."""
-
-    def __init__(self, ai_client: AIClient = None):
-        self.ai_client = ai_client or AIClient()
-
-    def calculate(self, item: QuotationItem, inventory: ProviderInventoryItem) -> tuple[float, dict]:
-        """Calcula score de forma síncrona (wrapper para la versión async)."""
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        score, breakdown = loop.run_until_complete(
-            self._calculate_async(item, inventory)
-        )
-        return score, breakdown
-
-    async def _calculate_async(self, item: QuotationItem, inventory: ProviderInventoryItem) -> tuple[float, dict]:
-        """Calcula score usando IA."""
-        system_instruction = """Eres un experto en logística y compras. Analiza este par de:
-        - Cotización (material solicitado)
-        - Inventario disponible de proveedor
-
-        Devuelve un JSON con scores de 0-100 para:
-        - disponibilidad: ¿el proveedor tiene suficiente cantidad? (0-100)
-        - precio: ¿el precio es competitivo? (0-100)
-        - logística: ¿puede entregar rápido? (0-100)
-        - confiabilidad: historial del proveedor (0-100, estima si es desconocido)
-        - compatibilidad: ¿cumple especificaciones? (0-100)
-
-        Formato JSON exacto:
-        {
-          "disponibilidad": number,
-          "precio": number,
-          "logistica": number,
-          "confiabilidad": number,
-          "compatibilidad": number,
-          "justificacion": string
-        }"""
-
-        prompt = f"""
-        Cotización solicitada:
-        - Material: {item.material_name}
-        - Cantidad: {item.quantity}
-        - Presupuesto por unidad: ${item.unit_price}
-
-        Proveedor disponible:
-        - Material: {inventory.material_name}
-        - Cantidad: {inventory.quantity_available}
-        - Precio por unidad: ${inventory.unit_price}
-        - Especificaciones: {inventory.specs or "N/A"}
-        """
-
-        try:
-            result = await self.ai_client.generate_json(
-                prompt=prompt,
-                system_instruction=system_instruction,
-            )
-
-            scores = {
-                "disponibilidad": result.get("disponibilidad", 50) / 100,
-                "precio": result.get("precio", 50) / 100,
-                "logistica": result.get("logistica", 50) / 100,
-                "confiabilidad": result.get("confiabilidad", 50) / 100,
-                "compatibilidad": result.get("compatibilidad", 50) / 100,
-            }
-
-            # Promedio ponderado
-            final_score = round(
-                (scores["disponibilidad"] * 0.25) +
-                (scores["precio"] * 0.25) +
-                (scores["logistica"] * 0.20) +
-                (scores["confiabilidad"] * 0.20) +
-                (scores["compatibilidad"] * 0.10),
-                2
-            )
-
-            breakdown = {
-                **scores,
-                "justificacion": result.get("justificacion", ""),
-                "final_score": final_score,
-            }
-
-            return final_score, breakdown
-
-        except Exception as e:
-            logger.warning("Error en scoring con IA, usando fallback: %s", str(e))
-            # Fallback a scoring simple
-            simple_strategy = SimpleScoringStrategy()
-            return simple_strategy.calculate(item, inventory)

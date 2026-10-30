@@ -81,6 +81,11 @@ export function Inventory() {
           <div><p className="eyebrow">INVENTARIO</p><h1>Actualiza tu catálogo</h1><p>Sube tu lista y la organizaremos por ti. Podrás revisarla antes de publicar.</p></div>
         </section>
         <div className="step-labels"><span className="current"><b>1</b> Subir archivo</span><i /><span><b>2</b> Revisar datos</span><i /><span><b>3</b> Publicar</span></div>
+        {error && (
+          <section className="card" style={{ padding: "1rem", marginBottom: "1rem", background: "#fee", borderColor: "#fcc" }}>
+            <p style={{ color: "#c00", margin: 0 }}>❌ Error: {error}</p>
+          </section>
+        )}
         {stage === "idle" ? (
           <section className="upload-card">
             <div className="upload-icon"><Icon name="upload" size={28} /></div>
@@ -140,8 +145,7 @@ export function Inventory() {
           <div className="review-count"><span><b>{uploadResult.items_saved}</b> Guardados</span><span><b>{uploadResult.items_extracted}</b> Totales</span></div>
         </div>
       )}
-      {stage !== "idle" && stage !== "processing" && (
-        <section className="card inventory-card">
+      <section className="card inventory-card">
           <div className="table-tools">
             <div className="search-field"><Icon name="search" size={18} /><input placeholder="Buscar producto" /></div>
             <div><button>Todos <b>{items.length}</b></button></div>
@@ -176,7 +180,6 @@ export function Inventory() {
             </div>
           )}
         </section>
-      )}
     </div>
   );
 }

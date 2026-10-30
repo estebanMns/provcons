@@ -12,6 +12,10 @@ import type { User, QuotationResult } from "@/lib/api";
 
 type Stage = "upload" | "processing" | "review" | "results";
 
+const copFormatter = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
+const formatCOP = (value: number) => copFormatter.format(value);
+const initials = (name: string) => name.split(/\s+/).filter((w) => w.length > 2).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || name.slice(0, 2).toUpperCase();
+
 export function Quotations() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -75,6 +79,11 @@ export function Quotations() {
           <div><p className="eyebrow">NUEVA SOLICITUD</p><h1>¿Qué materiales necesitas?</h1><p>Sube una cotización, lista de materiales o foto. La IA organizará la solicitud para comparar proveedores.</p></div>
         </section>
         <div className="step-labels"><span className="current"><b>1</b> Subir solicitud</span><i /><span><b>2</b> Revisar materiales</span><i /><span><b>3</b> Comparar</span></div>
+        {error && (
+          <section className="card" style={{ padding: "1rem", marginBottom: "1rem", background: "#fee", borderColor: "#fcc" }}>
+            <p style={{ color: "#c00", margin: 0 }}>❌ Error: {error}</p>
+          </section>
+        )}
         {stage === "upload" ? (
           <section className="upload-card quotation-upload">
             <div className="upload-icon"><Icon name="file" size={28} /></div>
@@ -162,77 +171,128 @@ export function Quotations() {
     return null;
   }
 
-  // Pantalla de resultados con proveedores recomendados
+  // Pantalla de resultados: ranking de proveedores y comparación por material
   if (isConstructora && stage === "results" && quotationResult) {
+    const r = quotationResult;
+    const combo = r.best_combination;
+    const itemsWithOffers = r.items_total - r.items_without_offers;
+    const restart = () => { setStage("upload"); setQuotationResult(null); };
     return (
       <div className="page">
         <section className="page-heading">
           <div>
-            <p className="eyebrow">RESULTADOS / {quotationResult.title}</p>
-            <h1>Proveedores recomendados</h1>
-            <p>La IA analizó {quotationResult.items_extracted} materiales y encontró {quotationResult.matches_found} coincidencias. Aquí están los mejores proveedores.</p>
+            <p className="eyebrow">RESULTADOS / {r.title}</p>
+            <h1>Comparación de proveedores</h1>
+            <p>Leímos {r.items_total} materiales: {itemsWithOffers} tienen ofertas de {r.providers.length} proveedor(es){r.items_without_offers > 0 ? ` y ${r.items_without_offers} no los ofrece nadie todavía` : ""}.</p>
           </div>
-          <Button variant="secondary" icon="plus" onClick={() => {
-            setStage("upload");
-            setQuotationResult(null);
-          }}>Nueva cotización</Button>
+          <Button variant="secondary" icon="plus" onClick={restart}>Nueva cotización</Button>
         </section>
 
-        <div className="match-layout">
-          <div className="match-list">
-            {quotationResult.top_providers && quotationResult.top_providers.length > 0 ? (
-              quotationResult.top_providers.map((provider, i) => (
-                <article key={provider.id} className={`match-card ${i === 0 ? "best-match" : ""}`}>
-                  {i === 0 && <div className="best-label"><Icon name="spark" size={14} /> MEJOR OPCIÓN SEGÚN IA</div>}
-                  <div className="match-main">
-                    <div className="company-logo">PR</div>
-                    <div>
-                      <h2>Proveedor {provider.provider_org_id}</h2>
-                      <p><Icon name="shield" size={14} /> Verificado · IA Score: {Math.round(provider.score * 100)}%</p>
+        {r.providers.length === 0 ? (
+          <section className="card" style={{ padding: "3rem", textAlign: "center" }}>
+            <h2 style={{ marginBottom: "0.5rem" }}>Ningún proveedor tiene estos materiales</h2>
+            <p style={{ color: "var(--text-secondary)" }}>Cuando los proveedores suban inventario con estos materiales, aparecerán aquí.</p>
+            <Button variant="secondary" onClick={restart}>Intentar otra cotización</Button>
+          </section>
+        ) : (
+          <>
+            <div className="match-layout">
+              <div className="match-list">
+                {r.providers.map((p, i) => (
+                  <article key={p.provider_org_id} className={`match-card ${i === 0 ? "best-match" : ""}`}>
+                    {i === 0 && <div className="best-label"><Icon name="spark" size={14} /> MEJOR OPCIÓN</div>}
+                    <div className="match-main">
+                      <div className="company-logo">{initials(p.provider_name)}</div>
+                      <div>
+                        <h2>{p.provider_name}</h2>
+                        <p><Icon name="wallet" size={14} /> Costo estimado {formatCOP(p.total_cost)}</p>
+                      </div>
+                      <Score value={Math.round(p.score * 100)} />
                     </div>
-                    <Score value={Math.round(provider.score * 100)} />
-                  </div>
-                  <div className="criteria">
-                    <Criterion
-                      label="Disponibilidad"
-                      value={`${Math.round((provider.criteria_breakdown?.disponibilidad || 0.5) * 100)}% del material`}
-                      percent={Math.round((provider.criteria_breakdown?.disponibilidad || 0.5) * 100)}
-                    />
-                    <Criterion
-                      label="Precio"
-                      value={`${Math.round((provider.criteria_breakdown?.precio || 0.5) * 100)}% competitivo`}
-                      percent={Math.round((provider.criteria_breakdown?.precio || 0.5) * 100)}
-                    />
-                    <Criterion
-                      label="Logística"
-                      value={`${Math.round((provider.criteria_breakdown?.logistica || 0.5) * 100)}% de velocidad`}
-                      percent={Math.round((provider.criteria_breakdown?.logistica || 0.5) * 100)}
-                    />
-                    <Criterion
-                      label="Confiabilidad"
-                      value={`${Math.round((provider.criteria_breakdown?.confiabilidad || 0.5) * 100)}% historial`}
-                      percent={Math.round((provider.criteria_breakdown?.confiabilidad || 0.5) * 100)}
-                    />
-                  </div>
-                  <div className="match-bottom">
-                    <div><span>Análisis IA</span><strong>{provider.criteria_breakdown?.justificacion || "Análisis completado"}</strong></div>
-                    <Button variant={i === 0 ? "primary" : "secondary"} onClick={goOrders}>
-                      {i === 0 ? "Elegir mejor proveedor" : "Considerar"}
-                    </Button>
-                  </div>
-                </article>
-              ))
-            ) : (
-              <div style={{ padding: "2rem", textAlign: "center" }}>
-                <p style={{ color: "var(--text-secondary)" }}>No se encontraron proveedores coincidentes</p>
-                <Button variant="secondary" onClick={() => {
-                  setStage("upload");
-                  setQuotationResult(null);
-                }}>Intentar otra cotización</Button>
+                    <div className="criteria">
+                      <Criterion label="Cobertura" value={`${p.items_covered} de ${r.items_total} materiales`} percent={Math.round(p.coverage * 100)} />
+                      <Criterion label="Stock completo" value={`${p.items_full_stock} de ${p.items_covered}`} percent={p.items_covered ? Math.round((p.items_full_stock / p.items_covered) * 100) : 0} />
+                      <Criterion label="Más económico en" value={`${p.cheapest_items} material(es)`} percent={itemsWithOffers ? Math.round((p.cheapest_items / itemsWithOffers) * 100) : 0} />
+                      <Criterion label="Unidades" value={p.unit_mismatches ? `${p.unit_mismatches} por revisar` : "Coinciden"} percent={p.items_covered ? Math.round(((p.items_covered - p.unit_mismatches) / p.items_covered) * 100) : 0} />
+                    </div>
+                    <div className="match-bottom">
+                      <div><span>Por qué</span><strong style={{ fontSize: 11, fontWeight: 600 }}>{p.justificacion}</strong></div>
+                      <Button variant={i === 0 ? "primary" : "secondary"} onClick={goOrders}>
+                        {i === 0 ? "Elegir proveedor" : "Considerar"}
+                      </Button>
+                    </div>
+                  </article>
+                ))}
               </div>
-            )}
-          </div>
-        </div>
+
+              <aside className="card quote-summary">
+                <span>MEJOR COMBINACIÓN</span>
+                <h2>Comprando cada material al mejor precio</h2>
+                <div>
+                  <strong>{formatCOP(combo.total_cost)}</strong>
+                  <small>{combo.items_covered} material(es) con {combo.providers_count} proveedor(es)</small>
+                </div>
+                <ul>
+                  {combo.items.map((c) => (
+                    <li key={c.item_id}><span>{c.material_name}<br /><small>{c.provider_name}</small></span><b>{c.subtotal != null ? formatCOP(c.subtotal) : "—"}</b></li>
+                  ))}
+                </ul>
+                {combo.savings_vs_recommendation != null && combo.savings_vs_recommendation > 0 && (
+                  <p style={{ fontSize: 10, color: "var(--success)", margin: "12px 0 0" }}>
+                    Ahorras {formatCOP(combo.savings_vs_recommendation)} frente a comprarle todo a {r.recommendation?.provider_name}.
+                  </p>
+                )}
+              </aside>
+            </div>
+
+            <section className="card" style={{ marginTop: 18 }}>
+              <div className="table-tools"><strong style={{ fontSize: 12 }}>Comparación por material</strong></div>
+              <div className="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Material pedido</th>
+                      {r.providers.map((p) => <th key={p.provider_org_id}>{p.provider_name}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {r.items.map((item) => (
+                      <tr key={item.item_id}>
+                        <td>
+                          <strong>{item.material_name}</strong><br />
+                          <small style={{ color: "var(--muted)" }}>
+                            {item.quantity} {item.unit}{item.budget_unit_price ? ` · presupuesto ${formatCOP(item.budget_unit_price)} c/u` : ""}
+                          </small>
+                        </td>
+                        {r.providers.map((p) => {
+                          const o = item.offers.find((x) => x.provider_org_id === p.provider_org_id);
+                          if (!o) return <td key={p.provider_org_id} style={{ color: "var(--muted)" }}>No lo ofrece</td>;
+                          return (
+                            <td key={p.provider_org_id} style={o.is_cheapest ? { background: "var(--success-soft)" } : undefined}>
+                              <strong>{o.unit_price != null ? `${formatCOP(o.unit_price)} / ${o.unit}` : "Sin precio"}</strong><br />
+                              <small style={{ color: "var(--muted)" }}>
+                                {o.material_name} · stock {o.quantity_available}
+                                {o.subtotal != null ? ` · total ${formatCOP(o.subtotal)}` : ""}
+                              </small>
+                              <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 5 }}>
+                                {o.is_cheapest && <Badge tone="success">Más barato</Badge>}
+                                {!o.criteria.stock_suficiente && <Badge tone="warning">Stock insuficiente</Badge>}
+                                {!o.criteria.unidad_compatible && <Badge tone="danger">Unidad distinta</Badge>}
+                                {o.criteria.vs_presupuesto != null && o.criteria.vs_presupuesto > 0 && (
+                                  <Badge tone="neutral">{Math.round(o.criteria.vs_presupuesto * 100)}% sobre presupuesto</Badge>
+                                )}
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </>
+        )}
       </div>
     );
   }
