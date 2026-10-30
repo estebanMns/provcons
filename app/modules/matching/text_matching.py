@@ -108,11 +108,6 @@ def parse_material(name: str) -> MaterialName:
     return MaterialName(words=words, specs={k: v for k, v in specs.items() if v}, normalized=normalized)
 
 
-def search_terms(name: str) -> list[str]:
-    """Palabras con las que se buscan candidatos en la base de datos."""
-    return sorted(w for w in parse_material(name).words if len(w) >= 3)
-
-
 def material_similarity(requested: str, offered: str) -> float:
     """Similitud entre 0 y 1 entre lo que pide la constructora y lo que ofrece
     el proveedor."""
@@ -139,6 +134,17 @@ def material_similarity(requested: str, offered: str) -> float:
             score = min(1.0, score + 0.05)
 
     return round(score, 3)
+
+
+def specs_conflict(requested: str, offered: str) -> bool:
+    """True si ambos nombres traen una medida del mismo tipo con valores
+    distintos (varilla 1/2" vs 3/8"). Es una regla dura: ni la revisión con IA
+    puede declarar equivalentes dos materiales con medidas distintas."""
+    req, off = parse_material(requested), parse_material(offered)
+    return any(
+        off.specs.get(kind) and not (values & off.specs[kind])
+        for kind, values in req.specs.items()
+    )
 
 
 def units_compatible(requested_unit: str | None, offered_unit: str | None) -> bool:

@@ -1,4 +1,4 @@
-from sqlalchemy import select, delete, func, or_, exists
+from sqlalchemy import select, delete, exists
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.matching.models import Quotation, QuotationItem, Match
 from app.modules.documents_ai.models import ProviderInventoryItem
@@ -31,15 +31,12 @@ class MatchRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def find_candidate_inventory(self, terms: list[str]) -> list[ProviderInventoryItem]:
-        """Pre-filtro amplio: ítems cuyo nombre contiene alguna de las palabras
-        del material pedido (sin tildes ni mayúsculas). La decisión fina de si
-        es el mismo material la toma text_matching.material_similarity."""
-        if not terms:
-            return []
-        normalized_name = func.translate(func.lower(ProviderInventoryItem.material_name), "áéíóúüñ", "aeiouun")
+    async def list_inventory(self, limit: int = 5000) -> list[ProviderInventoryItem]:
+        """Catálogo de todos los proveedores. Se carga una vez por cotización:
+        la comparación por texto se hace en memoria y la revisión con IA
+        necesita ver el catálogo completo para encontrar sinónimos."""
         result = await self.db.execute(
-            select(ProviderInventoryItem).where(or_(*(normalized_name.like(f"%{term}%") for term in terms)))
+            select(ProviderInventoryItem).order_by(ProviderInventoryItem.id).limit(limit)
         )
         return list(result.scalars().all())
 

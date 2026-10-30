@@ -188,6 +188,32 @@ export function Quotations() {
           <Button variant="secondary" icon="plus" onClick={restart}>Nueva cotización</Button>
         </section>
 
+        {r.ai_review.status === "ok" ? (
+          <div className="review-summary">
+            <div className="review-ai">
+              <Icon name="spark" />
+              <div>
+                <strong>La IA revisó {r.ai_review.products_reviewed} productos del inventario de los proveedores</strong>
+                <p>Confirma que cada oferta sea el mismo material, encuentra sinónimos (ej. &ldquo;acero de refuerzo&rdquo; = &ldquo;varilla corrugada&rdquo;) y descarta los que solo se parecen en el nombre.</p>
+              </div>
+            </div>
+            <div className="review-count">
+              <span><b>{r.ai_review.matches_added}</b> Por sinónimo</span>
+              <span><b>{r.ai_review.matches_rejected}</b> Descartadas</span>
+            </div>
+          </div>
+        ) : r.ai_review.status === "failed" ? (
+          <div className="review-summary" style={{ background: "var(--warning-soft)" }}>
+            <div className="review-ai">
+              <Icon name="warning" />
+              <div>
+                <strong>La revisión con IA no estuvo disponible</strong>
+                <p>Los proveedores se compararon solo por el nombre de los productos. Puedes intentarlo de nuevo más tarde.</p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {r.providers.length === 0 ? (
           <section className="card" style={{ padding: "3rem", textAlign: "center" }}>
             <h2 style={{ marginBottom: "0.5rem" }}>Ningún proveedor tiene estos materiales</h2>
@@ -276,12 +302,19 @@ export function Quotations() {
                               </small>
                               <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 5 }}>
                                 {o.is_cheapest && <Badge tone="success">Más barato</Badge>}
+                                {o.criteria.metodo === "ia" && <Badge tone="info"><Icon name="spark" size={11} /> Sinónimo (IA)</Badge>}
+                                {o.criteria.metodo === "texto+ia" && <Badge tone="info"><Icon name="check" size={11} /> Verificado por IA</Badge>}
                                 {!o.criteria.stock_suficiente && <Badge tone="warning">Stock insuficiente</Badge>}
                                 {!o.criteria.unidad_compatible && <Badge tone="danger">Unidad distinta</Badge>}
                                 {o.criteria.vs_presupuesto != null && o.criteria.vs_presupuesto > 0 && (
                                   <Badge tone="neutral">{Math.round(o.criteria.vs_presupuesto * 100)}% sobre presupuesto</Badge>
                                 )}
                               </div>
+                              {o.criteria.revision_ia?.motivo && (
+                                <small style={{ display: "block", marginTop: 5, color: "var(--ink-soft)", fontStyle: "italic" }}>
+                                  IA: {o.criteria.revision_ia.motivo}
+                                </small>
+                              )}
                             </td>
                           );
                         })}

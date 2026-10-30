@@ -140,7 +140,10 @@ def build_comparison(
         p["total_cost"] = round(p["total_cost"], 2)
         p["justificacion"] = _provider_justification(p, items_total)
         ranking.append(p)
-    ranking.sort(key=lambda p: (-p["score"], p["total_cost"]))
+    # A igual puntaje gana quien es más barato en más materiales; el costo total
+    # va al final porque dos proveedores que cubren materiales distintos no
+    # tienen totales comparables.
+    ranking.sort(key=lambda p: (-p["score"], -p["cheapest_items"], p["total_cost"]))
 
     recommendation = ranking[0] if ranking else None
     combination_total = round(sum(c["subtotal"] or 0 for c in combination), 2)

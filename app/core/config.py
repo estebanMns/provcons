@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     # IA
     gemini_api_key: str = ""
     gemini_default_model: str = "gemini-3.5-flash-lite"
+    # Revisión con IA del inventario en el matching (si es False, o no hay
+    # GEMINI_API_KEY, se usa solo la comparación por texto)
+    matching_ai_review: bool = True
 
     # Base de datos - Se carga del .env
     database_url: str

@@ -116,6 +116,17 @@ export interface OfferCriteria {
   unidad_compatible: boolean;
   stock_suficiente: boolean;
   vs_presupuesto?: number;
+  // "texto": coincidió por nombre; "ia": sinónimo que solo encontró la IA;
+  // "texto+ia": coincidió por nombre y la IA lo confirmó
+  metodo: "texto" | "ia" | "texto+ia";
+  revision_ia?: { equivalente: boolean; confianza: number; motivo: string };
+}
+
+export interface AIReview {
+  status: "ok" | "failed" | "disabled";
+  products_reviewed: number;
+  matches_added: number;
+  matches_rejected: number;
 }
 
 export interface ProviderOffer {
@@ -169,6 +180,7 @@ export interface QuotationResult {
   title: string;
   items_extracted: number;
   matches_found: number;
+  ai_review: AIReview;
   items_total: number;
   items_without_offers: number;
   items: ItemComparison[];

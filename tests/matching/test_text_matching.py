@@ -1,7 +1,7 @@
 import pytest
 
 from app.modules.matching.text_matching import (
-    MATCH_THRESHOLD, material_similarity, normalize_unit, search_terms, units_compatible,
+    MATCH_THRESHOLD, material_similarity, normalize_unit, specs_conflict, units_compatible,
 )
 
 
@@ -46,5 +46,8 @@ def test_unidades_equivalentes():
     assert units_compatible("", "bulto")  # sin unidad no se puede descartar
 
 
-def test_terminos_de_busqueda_sin_relleno_ni_medidas():
-    assert search_terms('Varillas corrugadas de 3/8" x 6m') == ["corrugada", "varilla"]
+def test_conflicto_de_medidas():
+    assert specs_conflict('varilla 1/2"', 'Varilla corrugada 3/8" x 6m')
+    assert specs_conflict("bloque 10x20x40", "Bloque de concreto 15x20x40")
+    assert not specs_conflict("acero de refuerzo 3/8", 'Varilla corrugada 3/8" x 6m')
+    assert not specs_conflict("cemento gris", "Cemento gris x 50kg")  # el pedido no trae medida

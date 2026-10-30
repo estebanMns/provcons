@@ -90,10 +90,18 @@ class BestCombinationOut(BaseModel):
     savings_vs_recommendation: float | None
 
 
+class AIReviewOut(BaseModel):
+    status: str  # "ok", "failed" o "disabled"
+    products_reviewed: int
+    matches_added: int     # coincidencias que solo encontró la IA (sinónimos)
+    matches_rejected: int  # coincidencias por texto que la IA descartó
+
+
 class QuotationComparisonOut(BaseModel):
     quotation_id: int
     title: str
     matches_found: int
+    ai_review: AIReviewOut
     items_total: int
     items_without_offers: int
     items: list[ItemComparisonOut]

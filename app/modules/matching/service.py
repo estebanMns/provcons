@@ -2,7 +2,8 @@ from app.modules.matching.repository import QuotationRepository, MatchRepository
 from app.modules.matching.models import Quotation, QuotationItem, Match, QuotationStatus
 from app.modules.matching.scoring import ScoringStrategy, OfferContext
 from app.modules.matching.comparison import ScoredOffer, build_comparison
-from app.modules.matching.text_matching import MATCH_THRESHOLD, material_similarity, search_terms, units_compatible
+from app.modules.matching.text_matching import MATCH_THRESHOLD, material_similarity, specs_conflict, units_compatible
+from app.modules.matching.ai_review import AIProductReviewer, ProductReview, ReviewResult, decide_similarity
 from app.modules.documents_ai.models import ProviderInventoryItem
 from app.core.audit import AuditService
 from app.core.exceptions import NotFoundError, ForbiddenError
@@ -15,11 +16,13 @@ class MatchingService:
     def __init__(
         self, quotation_repo: QuotationRepository, match_repo: MatchRepository,
         scoring_strategy: ScoringStrategy, audit: AuditService,
+        reviewer: AIProductReviewer | None = None,
     ):
         self.quotation_repo = quotation_repo
         self.match_repo = match_repo
         self.scoring_strategy = scoring_strategy
         self.audit = audit
+        self.reviewer = reviewer  # None = solo comparación por texto
 
     async def create_quotation(
     self, constructora_org_id: int, title: str, items_data: list[dict], actor_user_id: int,
@@ -40,21 +43,36 @@ class MatchingService:
         )
         return saved
 
-    async def _best_offer_per_provider(self, item: QuotationItem) -> list[tuple[ProviderInventoryItem, float]]:
-        """Candidatos del inventario que SÍ son el material pedido, dejando una
-        sola oferta por proveedor (si un proveedor tiene el material repetido,
-        cuenta la más parecida y, a igual parecido, la más barata)."""
-        candidates = await self.match_repo.find_candidate_inventory(search_terms(item.material_name))
+    @staticmethod
+    def _lexical_candidates(
+        items: list[QuotationItem], products: list[ProviderInventoryItem],
+    ) -> tuple[dict[tuple[int, int], float], dict[int, list[ProviderInventoryItem]]]:
+        """Similitud por texto de cada par (pedido, producto) y, por ítem, los
+        productos que el texto considera candidatos (para que la IA los confirme
+        o los descarte)."""
+        similarity: dict[tuple[int, int], float] = {}
+        candidates: dict[int, list[ProviderInventoryItem]] = {}
+        for item in items:
+            for product in products:
+                score = material_similarity(item.material_name, product.material_name)
+                similarity[(item.id, product.id)] = score
+                if score >= MATCH_THRESHOLD:
+                    candidates.setdefault(item.id, []).append(product)
+        return similarity, candidates
 
-        best: dict[int, tuple[ProviderInventoryItem, float]] = {}
-        for inventory in candidates:
-            similarity = material_similarity(item.material_name, inventory.material_name)
-            if similarity < MATCH_THRESHOLD:
-                continue
+    @staticmethod
+    def _best_offer_per_provider(
+        accepted: list[tuple[ProviderInventoryItem, float, str, ProductReview | None]],
+    ) -> list[tuple[ProviderInventoryItem, float, str, ProductReview | None]]:
+        """Una sola oferta por proveedor: si tiene el material repetido, cuenta
+        la más parecida y, a igual parecido, la más barata."""
+        best: dict[int, tuple] = {}
+        for offer in accepted:
+            inventory, similarity = offer[0], offer[1]
             current = best.get(inventory.provider_org_id)
             key = (similarity, -(inventory.unit_price or float("inf")))
             if current is None or key > (current[1], -(current[0].unit_price or float("inf"))):
-                best[inventory.provider_org_id] = (inventory, similarity)
+                best[inventory.provider_org_id] = offer
         return list(best.values())
 
     async def run_matching(self, quotation_id: int, actor_user_id: int, actor_org_id: int) -> dict:
@@ -67,19 +85,50 @@ class MatchingService:
         items = await self.quotation_repo.get_items(quotation_id)
         await self.match_repo.delete_unordered_for_items([item.id for item in items])
 
+        products = await self.match_repo.list_inventory()
+        lexical, lexical_candidates = self._lexical_candidates(items, products)
+        if self.reviewer is not None:
+            review = await self.reviewer.review(items, products, lexical_candidates)
+        else:
+            review = ReviewResult(status="disabled", reviews={})
+
+        # Contados por (material, proveedor) para no inflarlos con productos repetidos
+        added_by_ai: set[tuple[int, int]] = set()
+        rejected_by_ai: set[tuple[int, int]] = set()
         pending: list[tuple[QuotationItem, ProviderInventoryItem, Match]] = []
         for item in items:
-            offers = await self._best_offer_per_provider(item)
+            accepted = []
+            for product in products:
+                product_review = review.reviews.get((item.id, product.id))
+                lexical_score = lexical[(item.id, product.id)]
+                similarity, method = decide_similarity(
+                    lexical_score, specs_conflict(item.material_name, product.material_name),
+                    product_review, MATCH_THRESHOLD,
+                )
+                if method == "descartado_por_ia" and lexical_score >= MATCH_THRESHOLD:
+                    rejected_by_ai.add((item.id, product.provider_org_id))
+                if similarity is not None:
+                    accepted.append((product, similarity, method, product_review))
+
+            offers = self._best_offer_per_provider(accepted)
+            added_by_ai.update((item.id, inv.provider_org_id) for inv, _, method, _ in offers if method == "ia")
             comparable_prices = [
-                inv.unit_price for inv, _ in offers
+                inv.unit_price for inv, *_ in offers
                 if inv.unit_price and units_compatible(item.unit, inv.unit)
             ]
             best_unit_price = min(comparable_prices) if comparable_prices else None
 
-            for inventory, similarity in offers:
+            for inventory, similarity, method, product_review in offers:
                 score, breakdown = self.scoring_strategy.calculate(
                     item, inventory, OfferContext(similarity=similarity, best_unit_price=best_unit_price),
                 )
+                breakdown["metodo"] = method
+                if product_review is not None:
+                    breakdown["revision_ia"] = {
+                        "equivalente": product_review.equivalente,
+                        "confianza": product_review.confianza,
+                        "motivo": product_review.motivo,
+                    }
                 match = Match(
                     quotation_item_id=item.id,
                     provider_inventory_id=inventory.id,
@@ -107,11 +156,18 @@ class MatchingService:
                 "matches_generated": len(offers),
                 "providers_compared": len(comparison["providers"]),
                 "recommended_provider_org_id": recommendation["provider_org_id"] if recommendation else None,
+                "ai_review_status": review.status,
             },
         )
         return {
             "quotation_id": quotation.id,
             "title": quotation.title,
             "matches_found": len(offers),
+            "ai_review": {
+                "status": review.status,
+                "products_reviewed": review.products_reviewed,
+                "matches_added": len(added_by_ai),
+                "matches_rejected": len(rejected_by_ai),
+            },
             **comparison,
         }

@@ -4,6 +4,8 @@ from app.db.session import get_db
 from app.modules.matching.repository import QuotationRepository, MatchRepository
 from app.modules.matching.service import MatchingService
 from app.modules.matching.scoring import ComparativeScoringStrategy
+from app.modules.matching.ai_review import AIProductReviewer
+from app.core.config import settings
 from app.modules.matching.schemas import QuotationCreate, QuotationOut, QuotationComparisonOut, QuotationUploadOut
 from app.dependencies.auth import get_current_user
 from app.modules.users.models import User
@@ -19,10 +21,12 @@ router = APIRouter(prefix="/matching", tags=["Matching y recomendación"])
 
 def get_matching_service(db: AsyncSession = Depends(get_db)) -> MatchingService:
     audit = AuditService(AuditRepository(db))
+    reviewer = AIProductReviewer(AIClient()) if settings.matching_ai_review and settings.gemini_api_key else None
     return MatchingService(
         QuotationRepository(db), MatchRepository(db),
         scoring_strategy=ComparativeScoringStrategy(),
         audit=audit,
+        reviewer=reviewer,
     )
 
 
