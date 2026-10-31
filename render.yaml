@@ -1,0 +1,31 @@
+# Blueprint de Render para el backend (FastAPI). El frontend se publica en
+# Vercel. Los secretos se cargan en el panel de Render (sync: false), nunca
+# en este archivo. Pasos completos en DEPLOY.md.
+services:
+  - type: web
+    name: provcons-api
+    runtime: python
+    plan: free
+    region: ohio  # misma región que la base de datos RDS (us-east-2)
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.5
+      - key: ENVIRONMENT
+        value: production
+      - key: APP_NAME
+        value: ProvCons - Backend
+      # Dominio del frontend en Vercel, como lista JSON. Se actualiza cuando
+      # Vercel asigne la URL definitiva.
+      - key: CORS_ORIGINS
+        value: '["https://provcons.vercel.app"]'
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
