@@ -14,6 +14,7 @@ from app.modules.documents_ai.router import router as documents_ai_router
 from app.modules.matching.router import router as matching_router
 from app.modules.transactions.router import router as transactions_router
 from app.modules.audit.router import router as audit_router
+from app.modules.dashboard.router import router as dashboard_router
 
 # El logging se configura ANTES de crear la app, así cualquier log durante
 # el arranque ya sale formateado correctamente.
@@ -44,6 +45,7 @@ app.include_router(documents_ai_router, prefix="/api")
 app.include_router(matching_router, prefix="/api")
 app.include_router(transactions_router, prefix="/api")
 app.include_router(audit_router, prefix="/api")
+app.include_router(dashboard_router, prefix="/api")
 
 
 @app.middleware("http")

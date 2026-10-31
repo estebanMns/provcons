@@ -288,7 +288,54 @@ export async function uploadInventoryFile(
   return response.json();
 }
 
-export type AuditCategory = "ordenes" | "cotizaciones" | "inventario" | "cuenta";
+export interface RecentOrder {
+  id: number;
+  counterpart: string;
+  status: OrderStatus;
+  total_amount: number | null;
+  created_at: string;
+}
+
+export interface SalesOpportunity {
+  quotation_id: number;
+  title: string;
+  constructora: string;
+  created_at: string;
+  items_matched: number;
+  items_total: number;
+  cheapest_items: number;
+  estimated_value: number;
+  score: number;
+}
+
+export type DashboardSummary =
+  | {
+      role: "constructora";
+      open_quotations: number;
+      active_orders: number;
+      awaiting_confirmation: number;
+      in_transit: number;
+      delivered_orders: number;
+      committed_spend: number;
+      recent_orders: RecentOrder[];
+    }
+  | {
+      role: "proveedor";
+      inventory_products: number;
+      orders_to_confirm: number;
+      orders_to_ship: number;
+      in_transit: number;
+      delivered_sales: number;
+      opportunities_value: number;
+      opportunities: SalesOpportunity[];
+      recent_orders: RecentOrder[];
+    };
+
+export async function getDashboardSummary(): Promise<DashboardSummary> {
+  return fetchAPI<DashboardSummary>("/dashboard/summary");
+}
+
+export type AuditCategory ="ordenes" | "cotizaciones" | "inventario" | "cuenta";
 
 export interface AuditEntry {
   id: number;

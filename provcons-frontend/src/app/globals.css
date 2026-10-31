@@ -136,6 +136,7 @@ main { min-height: calc(100vh - 74px); }
 .stat-card strong { font-size: 20px; letter-spacing: -.5px; }
 .stat-card small { color: var(--muted); font-size: 9px; margin-top: 5px; }
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(280px, .75fr); gap: 18px; }
+.dashboard-grid > * { min-width: 0; } /* las tablas internas se desplazan en su tarjeta en vez de ensanchar la página */
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
 .card-head { min-height: 75px; padding: 18px 20px; display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line-soft); }
 .card-head h2 { font-size: 15px; margin: 0 0 5px; }
