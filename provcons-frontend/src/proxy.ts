@@ -7,7 +7,8 @@ export function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // Rutas públicas que no requieren autenticación
-  const publicRoutes = ["/login"];
+  // "/" es la página de presentación (estática con ISR)
+  const publicRoutes = ["/", "/login"];
   const isPublicRoute = publicRoutes.includes(pathname);
 
   // Si no está en ruta pública y no tiene token, redirige al login.

@@ -18,6 +18,7 @@ from app.modules.transactions.router import router as transactions_router
 from app.modules.audit.router import router as audit_router
 from app.modules.dashboard.router import router as dashboard_router
 from app.modules.observability.router import router as observability_router, prometheus_router
+from app.modules.public.router import router as public_router
 
 # El logging se configura ANTES de crear la app, así cualquier log durante
 # el arranque ya sale formateado correctamente.
@@ -54,6 +55,7 @@ app.include_router(transactions_router, prefix="/api")
 app.include_router(audit_router, prefix="/api")
 app.include_router(dashboard_router, prefix="/api")
 app.include_router(observability_router, prefix="/api")
+app.include_router(public_router, prefix="/api")
 app.include_router(prometheus_router)  # GET /metrics, formato Prometheus
 
 
