@@ -2,7 +2,7 @@ from sqlalchemy import select, delete, exists
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.matching.models import Quotation, QuotationItem, Match
 from app.modules.documents_ai.models import ProviderInventoryItem
-from app.modules.transactions.models import Order
+from app.modules.transactions.models import Order, OrderItem
 from app.modules.users.models import Organization
 
 
@@ -49,6 +49,7 @@ class MatchRepository:
             delete(Match).where(
                 Match.quotation_item_id.in_(item_ids),
                 ~exists().where(Order.match_id == Match.id),
+                ~exists().where(OrderItem.match_id == Match.id),
             )
         )
 

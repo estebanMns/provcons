@@ -7,10 +7,19 @@ import { Button } from "@/components/ui/Button";
 import { Criterion } from "@/components/ui/Criterion";
 import { Icon } from "@/components/ui/Icon";
 import { Score } from "@/components/ui/Score";
-import { getMe, uploadQuotationFile } from "@/lib/api";
-import type { User, QuotationResult } from "@/lib/api";
+import { createOrders, getMe, uploadQuotationFile } from "@/lib/api";
+import type { User, QuotationResult, PaymentTerms } from "@/lib/api";
 
 type Stage = "upload" | "processing" | "review" | "results";
+
+// Lo que la constructora está por comprar: un proveedor o la mejor combinación
+interface Purchase {
+  title: string;
+  matchIds: number[];
+  total: number;
+  providers: string[];
+  itemsCount: number;
+}
 
 const copFormatter = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
 const formatCOP = (value: number) => copFormatter.format(value);
@@ -23,6 +32,10 @@ export function Quotations() {
   const [fileName, setFileName] = useState<string>("");
   const [quotationResult, setQuotationResult] = useState<QuotationResult | null>(null);
   const [error, setError] = useState<string>("");
+  const [purchase, setPurchase] = useState<Purchase | null>(null);
+  const [paymentTerms, setPaymentTerms] = useState<PaymentTerms>("contado");
+  const [purchasing, setPurchasing] = useState(false);
+  const [purchaseError, setPurchaseError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const timer = useRef<number | null>(null);
 
@@ -70,7 +83,24 @@ export function Quotations() {
     }
   };
 
-  const goOrders = () => router.push("/ordenes");
+  const startPurchase = (p: Purchase) => {
+    setPurchaseError("");
+    setPaymentTerms("contado");
+    setPurchase(p);
+  };
+
+  const confirmPurchase = async () => {
+    if (!purchase || !quotationResult) return;
+    setPurchasing(true);
+    setPurchaseError("");
+    try {
+      await createOrders(quotationResult.quotation_id, purchase.matchIds, paymentTerms);
+      router.push("/ordenes");
+    } catch (err) {
+      setPurchaseError(err instanceof Error ? err.message : "No se pudo crear la orden");
+      setPurchasing(false);
+    }
+  };
 
   if (isConstructora && (stage === "upload" || stage === "processing")) {
     return (
@@ -243,8 +273,14 @@ export function Quotations() {
                     </div>
                     <div className="match-bottom">
                       <div><span>Por qué</span><strong style={{ fontSize: 11, fontWeight: 600 }}>{p.justificacion}</strong></div>
-                      <Button variant={i === 0 ? "primary" : "secondary"} onClick={goOrders}>
-                        {i === 0 ? "Elegir proveedor" : "Considerar"}
+                      <Button
+                        variant={i === 0 ? "primary" : "secondary"}
+                        onClick={() => startPurchase({
+                          title: `Comprar a ${p.provider_name}`, matchIds: p.match_ids, total: p.total_cost,
+                          providers: [p.provider_name], itemsCount: p.items_covered,
+                        })}
+                      >
+                        {i === 0 ? "Elegir proveedor" : "Elegir este"}
                       </Button>
                     </div>
                   </article>
@@ -267,6 +303,21 @@ export function Quotations() {
                   <p style={{ fontSize: 10, color: "var(--success)", margin: "12px 0 0" }}>
                     Ahorras {formatCOP(combo.savings_vs_recommendation)} frente a comprarle todo a {r.recommendation?.provider_name}.
                   </p>
+                )}
+                {combo.items.length > 0 && (
+                  <div style={{ marginTop: 14 }}>
+                    <Button
+                      wide
+                      variant={combo.providers_count > 1 ? "secondary" : "primary"}
+                      onClick={() => startPurchase({
+                        title: "Comprar la mejor combinación", matchIds: combo.items.map((c) => c.match_id),
+                        total: combo.total_cost, providers: [...new Set(combo.items.map((c) => c.provider_name))],
+                        itemsCount: combo.items.length,
+                      })}
+                    >
+                      Comprar combinación
+                    </Button>
+                  </div>
                 )}
               </aside>
             </div>
@@ -325,6 +376,36 @@ export function Quotations() {
               </div>
             </section>
           </>
+        )}
+
+        {purchase && (
+          <div className="modal-backdrop" onClick={() => !purchasing && setPurchase(null)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+              <span className="modal-icon"><Icon name="truck" size={26} /></span>
+              <h2>{purchase.title}</h2>
+              <p>
+                Se {purchase.providers.length > 1 ? `crearán ${purchase.providers.length} órdenes, una por proveedor` : "creará una orden"}.
+                {" "}Cada proveedor deberá confirmarla antes del envío.
+              </p>
+              <div className="modal-summary">
+                <span>Materiales <strong>{purchase.itemsCount}</strong></span>
+                <span>Proveedor(es) <strong>{purchase.providers.join(", ")}</strong></span>
+                <span>Total estimado <strong>{formatCOP(purchase.total)}</strong></span>
+              </div>
+              <div style={{ marginTop: 16, textAlign: "left" }}>
+                <small style={{ color: "var(--muted)" }}>Forma de pago</small>
+                <div className="modal-actions" style={{ marginTop: 6 }}>
+                  <Button variant={paymentTerms === "contado" ? "primary" : "secondary"} onClick={() => setPaymentTerms("contado")}>De contado</Button>
+                  <Button variant={paymentTerms === "cuotas" ? "primary" : "secondary"} onClick={() => setPaymentTerms("cuotas")}>A cuotas</Button>
+                </div>
+              </div>
+              {purchaseError && <p style={{ color: "var(--danger)", fontSize: 11, margin: "14px 0 0" }}>{purchaseError}</p>}
+              <div className="modal-actions">
+                <Button variant="secondary" onClick={() => setPurchase(null)} disabled={purchasing}>Cancelar</Button>
+                <Button icon="check" onClick={confirmPurchase} disabled={purchasing}>{purchasing ? "Creando…" : "Crear orden"}</Button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     );

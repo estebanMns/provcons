@@ -168,7 +168,7 @@ export interface ProviderRanking {
 }
 
 export interface BestCombination {
-  items: { item_id: number; material_name: string; provider_org_id: number; provider_name: string; unit_price: number | null; subtotal: number | null }[];
+  items: { item_id: number; material_name: string; provider_org_id: number; provider_name: string; match_id: number; unit_price: number | null; subtotal: number | null }[];
   total_cost: number;
   items_covered: number;
   providers_count: number;
@@ -262,4 +262,57 @@ export async function uploadInventoryFile(
   }
 
   return response.json();
+}
+
+export type OrderStatus = "pendiente" | "confirmada" | "en_transito" | "entregada" | "cancelada";
+export type PaymentTerms = "contado" | "cuotas";
+
+export interface OrderItem {
+  id: number;
+  requested_material: string;
+  material_name: string;
+  quantity: number;
+  unit: string;
+  unit_price: number | null;
+  subtotal: number | null;
+}
+
+export interface Order {
+  id: number;
+  quotation_id: number | null;
+  quotation_title: string | null;
+  constructora_org_id: number;
+  constructora_name: string | null;
+  provider_org_id: number;
+  provider_name: string | null;
+  status: OrderStatus;
+  payment_terms: PaymentTerms | null;
+  total_amount: number | null;
+  items: OrderItem[];
+  created_at: string;
+  updated_at: string;
+}
+
+// Crea una orden por cada proveedor de las ofertas elegidas
+export async function createOrders(quotationId: number, matchIds: number[], paymentTerms: PaymentTerms): Promise<Order[]> {
+  return fetchAPI<Order[]>("/orders", {
+    method: "POST",
+    body: JSON.stringify({ quotation_id: quotationId, match_ids: matchIds, payment_terms: paymentTerms }),
+  });
+}
+
+export async function listOrders(): Promise<Order[]> {
+  return fetchAPI<Order[]>("/orders");
+}
+
+export async function confirmOrder(orderId: number): Promise<Order> {
+  return fetchAPI<Order>(`/orders/${orderId}/confirm`, { method: "POST" });
+}
+
+export async function advanceOrder(orderId: number): Promise<Order> {
+  return fetchAPI<Order>(`/orders/${orderId}/advance`, { method: "POST" });
+}
+
+export async function cancelOrder(orderId: number): Promise<Order> {
+  return fetchAPI<Order>(`/orders/${orderId}/cancel`, { method: "POST" });
 }
