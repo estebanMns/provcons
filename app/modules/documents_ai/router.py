@@ -10,6 +10,8 @@ from app.core.audit import AuditService, AuditRepository
 from pydantic import BaseModel
 from app.modules.documents_ai.normalizer import DocumentNormalizer
 from app.infrastructure.ai_client import AIClient
+from app.infrastructure.documents import extract_json_from_upload
+from app.core.exceptions import ValidationError
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -79,24 +81,11 @@ async def upload_inventory_file(
 
     require_same_organization(provider_org_id, current_user)
 
-    # Leer archivo
     file_content = await file.read()
-    mime_type_map = {
-        "pdf": "application/pdf",
-        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "xls": "application/vnd.ms-excel",
-        "jpg": "image/jpeg",
-        "jpeg": "image/jpeg",
-        "png": "image/png",
-    }
+    logger.info("Procesando archivo de inventario: %s (%s bytes)", file.filename, len(file_content))
 
-    file_ext = file.filename.split(".")[-1].lower() if file.filename else ""
-    mime_type = mime_type_map.get(file_ext, "application/octet-stream")
-
-    logger.info("Procesando archivo de inventario: %s (%s bytes, tipo: %s)",
-                file.filename, len(file_content), mime_type)
-
-    # Usar IA para extraer productos del archivo
+    # Usar IA para extraer productos del archivo (PDF, imagen o Excel). Si la IA
+    # falla, el error llega al usuario en vez de responder "0 productos".
     ai_client = AIClient()
     system_instruction = """Eres un asistente que extrae información de catálogos de inventario.
     Devuelve ÚNICAMENTE un JSON con esta forma exacta:
@@ -110,18 +99,13 @@ async def upload_inventory_file(
           "specs": object
         }
       ]
-    }"""
+    }
+    Si no puedes determinar un valor con certeza, usa null en ese campo — nunca inventes datos."""
 
-    try:
-        extracted_data = await ai_client.generate_json_from_file(
-            file_bytes=file_content,
-            mime_type=mime_type,
-            system_instruction=system_instruction,
-        )
-        items_data = extracted_data.get("items", [])
-    except Exception as e:
-        logger.error("Error procesando archivo con IA: %s", str(e))
-        items_data = []
+    extracted_data = await extract_json_from_upload(ai_client, file.filename, file_content, system_instruction)
+    items_data = [i for i in extracted_data.get("items", []) or [] if isinstance(i, dict) and i.get("material_name")]
+    if not items_data:
+        raise ValidationError("No se encontraron productos en el archivo")
 
     # Guardar items en inventario
     service = InventoryService(
@@ -144,7 +128,10 @@ async def upload_inventory_file(
             )
             saved_items.append(saved_item)
         except Exception as e:
+            # Un ítem inválido (ej. sin precio) no debe tumbar el resto: se
+            # deshace la transacción fallida y se sigue con el siguiente.
             logger.warning("Error guardando item de inventario: %s", str(e))
+            await db.rollback()
             continue
 
     logger.info("Inventario procesado: org=%s, items_extracted=%s, items_saved=%s",

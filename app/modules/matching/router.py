@@ -12,6 +12,7 @@ from app.modules.users.models import User
 from app.core.audit import AuditService, AuditRepository
 from app.core.exceptions import ValidationError
 from app.infrastructure.ai_client import AIClient
+from app.infrastructure.documents import extract_json_from_upload
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -95,25 +96,12 @@ async def upload_quotation_file(
     """Endpoint que procesa un archivo de cotización (PDF, Excel o imagen) con IA,
     extrae los materiales, crea una cotización y ejecuta matching automático."""
 
-    # Leer archivo
     file_content = await file.read()
-    mime_type_map = {
-        "pdf": "application/pdf",
-        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "xls": "application/vnd.ms-excel",
-        "jpg": "image/jpeg",
-        "jpeg": "image/jpeg",
-        "png": "image/png",
-    }
+    logger.info("Procesando archivo de cotización: %s (%s bytes)", file.filename, len(file_content))
 
-    file_ext = file.filename.split(".")[-1].lower() if file.filename else ""
-    mime_type = mime_type_map.get(file_ext, "application/octet-stream")
-
-    logger.info("Procesando archivo de cotización: %s (%s bytes, tipo: %s)",
-                file.filename, len(file_content), mime_type)
-
-    # Usar IA para extraer materiales del archivo. Si la IA falla, el
-    # AIServiceError llega al usuario en vez de crear una cotización vacía.
+    # Usar IA para extraer materiales del archivo (PDF, imagen o Excel). Si la
+    # IA falla, el AIServiceError llega al usuario en vez de crear una
+    # cotización vacía.
     ai_client = AIClient()
     system_instruction = """Eres un asistente que extrae información de materiales de cotizaciones.
     Devuelve ÚNICAMENTE un JSON con esta forma exacta:
@@ -130,12 +118,8 @@ async def upload_quotation_file(
     }
     Si no puedes determinar un valor con certeza, usa null en ese campo — nunca inventes datos."""
 
-    extracted_data = await ai_client.generate_json_from_file(
-        file_bytes=file_content,
-        mime_type=mime_type,
-        system_instruction=system_instruction,
-    )
-    items_data = _clean_extracted_items((extracted_data or {}).get("items", []))
+    extracted_data = await extract_json_from_upload(ai_client, file.filename, file_content, system_instruction)
+    items_data = _clean_extracted_items(extracted_data.get("items", []))
     if not items_data:
         raise ValidationError("No se encontraron materiales con cantidad en el archivo")
 
