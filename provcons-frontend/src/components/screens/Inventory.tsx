@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { getInventory, getMe, uploadInventoryFile } from "@/lib/api";
+import { precheckUpload, rememberUpload } from "@/lib/uploadCheck";
 import type { User, InventoryItem, InventoryUploadResult } from "@/lib/api";
 
 type Stage = "idle" | "processing" | "review" | "done";
@@ -19,26 +20,32 @@ export function Inventory() {
   const [uploadResult, setUploadResult] = useState<InventoryUploadResult | null>(null);
   const [error, setError] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const timer = useRef<number | null>(null);
 
   useEffect(() => {
+    // Si el efecto se descarta (desmontaje o doble ejecución en modo estricto),
+    // sus respuestas tardías se ignoran: no deben pisar lo que el usuario ya hizo
+    let cancelled = false;
     getMe()
       .then((userData) => {
+        if (cancelled) return;
         setUser(userData);
         if (userData.organization?.type !== "proveedor") {
           router.push("/dashboard");
           return;
         }
         getInventory(userData.organization.id).then((saved) => {
-          if (saved.length > 0) {
+          if (!cancelled && saved.length > 0) {
             setItems(saved);
             setStage("review");
           }
         });
       })
       .catch(() => {
-        router.push("/login");
+        if (!cancelled) router.push("/login");
       });
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   if (!user) {
@@ -47,6 +54,7 @@ export function Inventory() {
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = ""; // permite volver a elegir el mismo archivo tras un error
     if (file && user.organization) {
       setFileName(file.name);
       await processInventoryFile(file);
@@ -58,27 +66,25 @@ export function Inventory() {
   };
 
   const processInventoryFile = async (file: File) => {
-    setStage("processing");
     setError("");
+    // Revisión en un Web Worker (tipo real, tamaño, archivo repetido) antes de subir
+    const check = await precheckUpload(file, "inventario");
+    if (!check.ok) {
+      setError(check.error);
+      return;
+    }
 
+    setStage("processing");
     try {
       const result = await uploadInventoryFile(file, user.organization!.id);
+      rememberUpload("inventario", check.hash, file.name);
       setUploadResult(result);
       setItems(result.saved_items || []);
-
-      // Simular tiempo de procesamiento
-      if (timer.current) window.clearTimeout(timer.current);
-      timer.current = window.setTimeout(() => setStage("done"), 1500);
+      setStage("done");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al procesar el inventario");
       setStage("idle");
     }
-  };
-
-  const process = () => {
-    setStage("processing");
-    if (timer.current) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setStage("review"), 1800);
   };
 
   if (stage === "idle" || stage === "processing") {

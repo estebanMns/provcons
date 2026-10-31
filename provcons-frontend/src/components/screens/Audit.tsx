@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { listActivity } from "@/lib/api";
+import { buildCsvInWorker } from "@/lib/workers";
 import type { AuditCategory, AuditEntry } from "@/lib/api";
 
 const PAGE_SIZE = 50;
@@ -29,16 +30,14 @@ const CATEGORY_LABEL: Record<string, { label: string; tone: "info" | "success" |
 const formatDateTime = (iso: string) =>
   new Date(iso).toLocaleString("es-CO", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
-function downloadCsv(entries: AuditEntry[]) {
-  const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
-  const rows = [
-    ["Fecha", "Usuario", "Organización", "Acción", "Detalle"],
-    ...entries.map((e) => [
+async function downloadCsv(entries: AuditEntry[]) {
+  // El CSV se arma en un Web Worker: con miles de eventos no congela la pantalla
+  const { csv } = await buildCsvInWorker({
+    header: ["Fecha", "Usuario", "Organización", "Acción", "Detalle"],
+    rows: entries.map((e) => [
       new Date(e.created_at).toISOString(), e.actor_name ?? "", e.actor_organization_name ?? "", e.action, e.description,
     ]),
-  ];
-  // BOM para que Excel abra bien las tildes
-  const csv = "﻿" + rows.map((r) => r.map((c) => escape(String(c))).join(",")).join("\r\n");
+  });
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
   const link = document.createElement("a");
   link.href = url;
@@ -53,6 +52,7 @@ export function Audit() {
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(async (offset: number, category: AuditCategory | "todo") => {
     setLoading(true);
@@ -81,8 +81,21 @@ export function Audit() {
           <h1>Historial de actividad</h1>
           <p>Registro de solo lectura de las acciones de tu organización y de las órdenes en las que participa.</p>
         </div>
-        <Button variant="secondary" icon="file" onClick={() => entries && downloadCsv(entries)} disabled={!entries?.length}>
-          Exportar registro
+        <Button
+          variant="secondary" icon="file" disabled={!entries?.length || exporting}
+          onClick={async () => {
+            if (!entries) return;
+            setExporting(true);
+            try {
+              await downloadCsv(entries);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "No se pudo exportar el registro");
+            } finally {
+              setExporting(false);
+            }
+          }}
+        >
+          {exporting ? "Exportando…" : "Exportar registro"}
         </Button>
       </section>
 

@@ -8,6 +8,7 @@ import { Criterion } from "@/components/ui/Criterion";
 import { Icon } from "@/components/ui/Icon";
 import { Score } from "@/components/ui/Score";
 import { createOrders, getComparison, getMe, listQuotations, rerunComparison, uploadQuotationFile } from "@/lib/api";
+import { precheckUpload, rememberUpload } from "@/lib/uploadCheck";
 import type { User, QuotationResult, QuotationSummary, PaymentTerms } from "@/lib/api";
 
 type Stage = "list" | "upload" | "processing" | "review" | "results";
@@ -47,7 +48,6 @@ export function Quotations() {
   const [purchasing, setPurchasing] = useState(false);
   const [purchaseError, setPurchaseError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const timer = useRef<number | null>(null);
 
   useEffect(() => {
     getMe()
@@ -98,6 +98,7 @@ export function Quotations() {
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = ""; // permite volver a elegir el mismo archivo tras un error
     if (file) {
       setFileName(file.name);
       await processQuotationFile(file);
@@ -109,16 +110,20 @@ export function Quotations() {
   };
 
   const processQuotationFile = async (file: File) => {
-    setStage("processing");
     setError("");
+    // Revisión en un Web Worker (tipo real, tamaño, archivo repetido) antes de subir
+    const check = await precheckUpload(file, "cotizacion");
+    if (!check.ok) {
+      setError(check.error);
+      return;
+    }
 
+    setStage("processing");
     try {
       const result = await uploadQuotationFile(file, file.name);
+      rememberUpload("cotizacion", check.hash, file.name);
       setQuotationResult(result);
-
-      // Simular tiempo de procesamiento
-      if (timer.current) window.clearTimeout(timer.current);
-      timer.current = window.setTimeout(() => setStage("results"), 1500);
+      setStage("results");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al procesar la cotización");
       setStage("upload");
