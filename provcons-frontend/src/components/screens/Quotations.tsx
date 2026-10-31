@@ -7,10 +7,17 @@ import { Button } from "@/components/ui/Button";
 import { Criterion } from "@/components/ui/Criterion";
 import { Icon } from "@/components/ui/Icon";
 import { Score } from "@/components/ui/Score";
-import { createOrders, getMe, uploadQuotationFile } from "@/lib/api";
-import type { User, QuotationResult, PaymentTerms } from "@/lib/api";
+import { createOrders, getComparison, getMe, listQuotations, rerunComparison, uploadQuotationFile } from "@/lib/api";
+import type { User, QuotationResult, QuotationSummary, PaymentTerms } from "@/lib/api";
 
-type Stage = "upload" | "processing" | "review" | "results";
+type Stage = "list" | "upload" | "processing" | "review" | "results";
+
+const QUOTATION_STATUS: Record<QuotationSummary["status"], { label: string; tone: "success" | "warning" | "danger" | "info" | "neutral" }> = {
+  abierta: { label: "Abierta", tone: "info" },
+  en_negociacion: { label: "En negociación", tone: "warning" },
+  cerrada: { label: "Cerrada", tone: "success" },
+  cancelada: { label: "Cancelada", tone: "danger" },
+};
 
 // Lo que la constructora está por comprar: un proveedor o la mejor combinación
 interface Purchase {
@@ -28,7 +35,10 @@ const initials = (name: string) => name.split(/\s+/).filter((w) => w.length > 2)
 export function Quotations() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [stage, setStage] = useState<Stage>("upload");
+  const [stage, setStage] = useState<Stage>("list");
+  const [quotations, setQuotations] = useState<QuotationSummary[] | null>(null);
+  const [loadingId, setLoadingId] = useState<number | null>(null);
+  const [rerunning, setRerunning] = useState(false);
   const [fileName, setFileName] = useState<string>("");
   const [quotationResult, setQuotationResult] = useState<QuotationResult | null>(null);
   const [error, setError] = useState<string>("");
@@ -45,7 +55,9 @@ export function Quotations() {
         setUser(userData);
         if (userData.organization?.type !== "constructora") {
           router.push("/dashboard");
+          return;
         }
+        loadQuotations();
       })
       .catch(() => {
         router.push("/login");
@@ -53,6 +65,36 @@ export function Quotations() {
   }, [router]);
 
   const isConstructora = user?.organization?.type === "constructora";
+
+  const loadQuotations = () => {
+    listQuotations()
+      .then(setQuotations)
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "No se pudieron cargar las cotizaciones");
+        setQuotations([]);
+      });
+  };
+
+  const backToList = () => {
+    setStage("list");
+    setQuotationResult(null);
+    setError("");
+    loadQuotations();
+  };
+
+  const openComparison = async (quotationId: number, rerun: boolean) => {
+    setLoadingId(quotationId);
+    setRerunning(rerun);
+    setError("");
+    try {
+      setQuotationResult(await (rerun ? rerunComparison(quotationId) : getComparison(quotationId)));
+      setStage("results");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo abrir la comparación");
+    } finally {
+      setLoadingId(null);
+    }
+  };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -107,6 +149,7 @@ export function Quotations() {
       <div className="page narrow-page">
         <section className="page-heading">
           <div><p className="eyebrow">NUEVA SOLICITUD</p><h1>¿Qué materiales necesitas?</h1><p>Sube una cotización, lista de materiales o foto. La IA organizará la solicitud para comparar proveedores.</p></div>
+          {stage === "upload" && <Button variant="ghost" onClick={backToList}>Mis cotizaciones</Button>}
         </section>
         <div className="step-labels"><span className="current"><b>1</b> Subir solicitud</span><i /><span><b>2</b> Revisar materiales</span><i /><span><b>3</b> Comparar</span></div>
         {error && (
@@ -215,7 +258,10 @@ export function Quotations() {
             <h1>Comparación de proveedores</h1>
             <p>Leímos {r.items_total} materiales: {itemsWithOffers} tienen ofertas de {r.providers.length} proveedor(es){r.items_without_offers > 0 ? ` y ${r.items_without_offers} no los ofrece nadie todavía` : ""}.</p>
           </div>
-          <Button variant="secondary" icon="plus" onClick={restart}>Nueva cotización</Button>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <Button variant="ghost" onClick={backToList}>Mis cotizaciones</Button>
+            <Button variant="secondary" icon="plus" onClick={restart}>Nueva cotización</Button>
+          </div>
         </section>
 
         {r.ai_review.status === "ok" ? (
@@ -355,8 +401,9 @@ export function Quotations() {
                                 {o.is_cheapest && <Badge tone="success">Más barato</Badge>}
                                 {o.criteria.metodo === "ia" && <Badge tone="info"><Icon name="spark" size={11} /> Sinónimo (IA)</Badge>}
                                 {o.criteria.metodo === "texto+ia" && <Badge tone="info"><Icon name="check" size={11} /> Verificado por IA</Badge>}
-                                {!o.criteria.stock_suficiente && <Badge tone="warning">Stock insuficiente</Badge>}
-                                {!o.criteria.unidad_compatible && <Badge tone="danger">Unidad distinta</Badge>}
+                                {/* === false: las comparaciones antiguas no traen estos campos */}
+                                {o.criteria.stock_suficiente === false && <Badge tone="warning">Stock insuficiente</Badge>}
+                                {o.criteria.unidad_compatible === false && <Badge tone="danger">Unidad distinta</Badge>}
                                 {o.criteria.vs_presupuesto != null && o.criteria.vs_presupuesto > 0 && (
                                   <Badge tone="neutral">{Math.round(o.criteria.vs_presupuesto * 100)}% sobre presupuesto</Badge>
                                 )}
@@ -411,31 +458,61 @@ export function Quotations() {
     );
   }
 
-  // Pantalla vacía o de cotizaciones
+  // Historial de cotizaciones
   return (
     <div className="page">
       <section className="page-heading">
         <div>
           <p className="eyebrow">COTIZACIONES</p>
-          <h1>Cotizaciones</h1>
-          <p>Aquí aparecerán tus cotizaciones y oportunidades de proveedores.</p>
+          <h1>Tus cotizaciones</h1>
+          <p>Cada cotización guarda su comparación de proveedores. Ábrela para comprar o vuelve a comparar si los proveedores actualizaron su inventario.</p>
         </div>
-        {isConstructora && <Button variant="secondary" icon="plus" onClick={() => setStage("upload")}>Subir cotización</Button>}
+        {isConstructora && <Button icon="plus" onClick={() => { setError(""); setStage("upload"); }}>Nueva cotización</Button>}
       </section>
       {error && (
-        <section className="card" style={{ padding: "1rem", marginBottom: "1rem", background: "#fee", borderColor: "#fcc" }}>
-          <p style={{ color: "#c00", margin: 0 }}>❌ Error: {error}</p>
+        <section className="card" style={{ padding: "1rem", marginBottom: "1rem", background: "var(--danger-soft)", borderColor: "#f3c9c6" }}>
+          <p style={{ color: "var(--danger)", margin: 0 }}>{error}</p>
         </section>
       )}
-      <section className="card" style={{ padding: "3rem", textAlign: "center" }}>
-        <div style={{ opacity: 0.5, marginBottom: "1rem" }}>
-          <Icon name="file" size={48} />
-        </div>
-        <h2 style={{ marginBottom: "0.5rem" }}>Sin cotizaciones</h2>
-        <p style={{ color: "var(--text-secondary)" }}>
-          No tienes cotizaciones aún. {isConstructora ? "Crea una solicitud de materiales para comenzar a comparar proveedores." : "Las solicitudes de cotizaciones aparecerán aquí."}
-        </p>
-      </section>
+      {quotations === null ? null : quotations.length === 0 ? (
+        <section className="card" style={{ padding: "3rem", textAlign: "center" }}>
+          <div style={{ opacity: 0.5, marginBottom: "1rem" }}><Icon name="file" size={48} /></div>
+          <h2 style={{ marginBottom: "0.5rem" }}>Sin cotizaciones</h2>
+          <p style={{ color: "var(--text-secondary)" }}>Sube tu primera lista de materiales para comparar proveedores.</p>
+          <Button icon="upload" onClick={() => setStage("upload")}>Subir cotización</Button>
+        </section>
+      ) : (
+        <section className="card">
+          <div className="table-scroll">
+            <table>
+              <thead><tr><th>Cotización</th><th>Fecha</th><th>Materiales</th><th>Estado</th><th /></tr></thead>
+              <tbody>
+                {quotations.map((q) => (
+                  <tr key={q.id}>
+                    <td><strong>{q.title}</strong></td>
+                    <td>{new Date(q.created_at).toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" })}</td>
+                    <td>{q.items_count}</td>
+                    <td>
+                      <Badge tone={QUOTATION_STATUS[q.status].tone}>{QUOTATION_STATUS[q.status].label}</Badge>
+                      {q.active_orders > 0 && <small style={{ display: "block", marginTop: 4, color: "var(--muted)" }}>{q.active_orders} orden(es) activa(s)</small>}
+                    </td>
+                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                      <div style={{ display: "inline-flex", gap: 6 }}>
+                        <Button variant="ghost" onClick={() => openComparison(q.id, true)} disabled={loadingId !== null || q.items_count === 0}>
+                          {loadingId === q.id && rerunning ? "Comparando…" : "Volver a comparar"}
+                        </Button>
+                        <Button variant="secondary" onClick={() => openComparison(q.id, false)} disabled={loadingId !== null || q.items_count === 0}>
+                          {loadingId === q.id && !rerunning ? "Abriendo…" : "Ver comparación"}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

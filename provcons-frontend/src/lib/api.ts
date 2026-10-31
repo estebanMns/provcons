@@ -123,7 +123,8 @@ export interface OfferCriteria {
 }
 
 export interface AIReview {
-  status: "ok" | "failed" | "disabled";
+  // "stored": comparación reabierta del historial (la IA ya revisó al comparar)
+  status: "ok" | "failed" | "disabled" | "stored";
   products_reviewed: number;
   matches_added: number;
   matches_rejected: number;
@@ -175,10 +176,33 @@ export interface BestCombination {
   savings_vs_recommendation: number | null;
 }
 
+export interface QuotationSummary {
+  id: number;
+  title: string;
+  status: "abierta" | "en_negociacion" | "cerrada" | "cancelada";
+  created_at: string;
+  items_count: number;
+  active_orders: number;
+}
+
+export async function listQuotations(): Promise<QuotationSummary[]> {
+  return fetchAPI<QuotationSummary[]>("/matching/quotations");
+}
+
+// Comparación guardada: no vuelve a llamar a la IA
+export async function getComparison(quotationId: number): Promise<QuotationResult> {
+  return fetchAPI<QuotationResult>(`/matching/quotations/${quotationId}/comparison`);
+}
+
+// Vuelve a buscar proveedores con el inventario actual (incluye revisión con IA)
+export async function rerunComparison(quotationId: number): Promise<QuotationResult> {
+  return fetchAPI<QuotationResult>(`/matching/quotations/${quotationId}/run`, { method: "POST" });
+}
+
 export interface QuotationResult {
   quotation_id: number;
   title: string;
-  items_extracted: number;
+  items_extracted?: number;  // solo al subir un archivo
   matches_found: number;
   ai_review: AIReview;
   items_total: number;

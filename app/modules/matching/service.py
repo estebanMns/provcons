@@ -43,6 +43,50 @@ class MatchingService:
         )
         return saved
 
+    async def list_quotations(self, org_id: int) -> list[dict]:
+        return await self.quotation_repo.list_by_organization(org_id)
+
+    async def get_comparison(self, quotation_id: int, actor_org_id: int) -> dict:
+        """Rearma la comparación con los matches ya guardados, sin volver a
+        llamar a la IA (para reabrir una cotización desde el historial)."""
+        quotation = await self._get_owned_quotation(quotation_id, actor_org_id)
+        items = await self.quotation_repo.get_items(quotation_id)
+        items_by_id = {item.id: item for item in items}
+
+        # Si se recalculó la comparación, los matches que tienen orden se
+        # conservan junto a los nuevos: por material y proveedor vale el último.
+        latest: dict[tuple[int, int], tuple] = {}
+        for match, inventory in await self.match_repo.get_offers_for_items(list(items_by_id)):
+            latest[(match.quotation_item_id, match.provider_org_id)] = (match, inventory)
+        offers = [
+            ScoredOffer(item=items_by_id[match.quotation_item_id], inventory=inventory, match=match)
+            for match, inventory in latest.values()
+        ]
+
+        provider_names = await self.match_repo.get_organization_names({o.match.provider_org_id for o in offers})
+        return {
+            "quotation_id": quotation.id,
+            "title": quotation.title,
+            "matches_found": len(offers),
+            "ai_review": {
+                # "stored": la revisión ya se hizo al comparar; cada oferta
+                # conserva su veredicto en criteria.revision_ia
+                "status": "stored",
+                "products_reviewed": 0,
+                "matches_added": sum(1 for o in offers if o.match.criteria_breakdown.get("metodo") == "ia"),
+                "matches_rejected": 0,
+            },
+            **build_comparison(items, offers, provider_names),
+        }
+
+    async def _get_owned_quotation(self, quotation_id: int, actor_org_id: int) -> Quotation:
+        quotation = await self.quotation_repo.get_by_id(quotation_id)
+        if quotation is None:
+            raise NotFoundError("Cotización no encontrada")
+        if quotation.constructora_org_id != actor_org_id:
+            raise ForbiddenError("No tienes acceso a esta cotización")
+        return quotation
+
     @staticmethod
     def _lexical_candidates(
         items: list[QuotationItem], products: list[ProviderInventoryItem],
@@ -76,11 +120,7 @@ class MatchingService:
         return list(best.values())
 
     async def run_matching(self, quotation_id: int, actor_user_id: int, actor_org_id: int) -> dict:
-        quotation = await self.quotation_repo.get_by_id(quotation_id)
-        if quotation is None:
-            raise NotFoundError("Cotización no encontrada")
-        if quotation.constructora_org_id != actor_org_id:
-            raise ForbiddenError("No tienes acceso a esta cotización")
+        quotation = await self._get_owned_quotation(quotation_id, actor_org_id)
 
         items = await self.quotation_repo.get_items(quotation_id)
         await self.match_repo.delete_unordered_for_items([item.id for item in items])

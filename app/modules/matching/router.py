@@ -6,7 +6,9 @@ from app.modules.matching.service import MatchingService
 from app.modules.matching.scoring import ComparativeScoringStrategy
 from app.modules.matching.ai_review import AIProductReviewer
 from app.core.config import settings
-from app.modules.matching.schemas import QuotationCreate, QuotationOut, QuotationComparisonOut, QuotationUploadOut
+from app.modules.matching.schemas import (
+    QuotationCreate, QuotationOut, QuotationComparisonOut, QuotationUploadOut, QuotationSummaryOut,
+)
 from app.dependencies.auth import get_current_user
 from app.modules.users.models import User
 from app.core.audit import AuditService, AuditRepository
@@ -70,6 +72,25 @@ async def create_quotation(
         constructora_org_id=current_user.organization_id,
         title=payload.title, items_data=items_data, actor_user_id=current_user.id,
     )
+
+
+@router.get("/quotations", response_model=list[QuotationSummaryOut])
+async def list_quotations(
+    service: MatchingService = Depends(get_matching_service),
+    current_user: User = Depends(get_current_user),
+):
+    """Historial de cotizaciones de la organización."""
+    return await service.list_quotations(current_user.organization_id)
+
+
+@router.get("/quotations/{quotation_id}/comparison", response_model=QuotationComparisonOut)
+async def get_comparison(
+    quotation_id: int,
+    service: MatchingService = Depends(get_matching_service),
+    current_user: User = Depends(get_current_user),
+):
+    """Comparación guardada de una cotización (no vuelve a llamar a la IA)."""
+    return await service.get_comparison(quotation_id, current_user.organization_id)
 
 
 @router.post("/quotations/{quotation_id}/run", response_model=QuotationComparisonOut)
