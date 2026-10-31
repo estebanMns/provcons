@@ -1,3 +1,4 @@
+import asyncio
 import time
 from contextlib import asynccontextmanager
 
@@ -8,6 +9,7 @@ from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.core.exceptions import DomainError
 from app.core.logging import configure_logging, get_logger
+from app.core.metrics import metrics, monitor_event_loop_lag
 
 from app.modules.users.router import router as users_router
 from app.modules.documents_ai.router import router as documents_ai_router
@@ -15,6 +17,7 @@ from app.modules.matching.router import router as matching_router, matching_engi
 from app.modules.transactions.router import router as transactions_router
 from app.modules.audit.router import router as audit_router
 from app.modules.dashboard.router import router as dashboard_router
+from app.modules.observability.router import router as observability_router, prometheus_router
 
 # El logging se configura ANTES de crear la app, así cualquier log durante
 # el arranque ya sale formateado correctamente.
@@ -27,8 +30,12 @@ _is_dev = settings.environment == "development"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Reemplaza a @app.on_event('startup'), que está deprecado en FastAPI."""
-    logger.info("=== %s iniciando en modo '%s' ===", settings.app_name, settings.environment)
+    logger.info("=== %s iniciando en modo '%s' (event loop: %s) ===",
+                settings.app_name, settings.environment, type(asyncio.get_running_loop()).__module__)
+    # Tarea de fondo en el mismo event loop: mide si algo lo está bloqueando
+    lag_monitor = asyncio.create_task(monitor_event_loop_lag())
     yield
+    lag_monitor.cancel()
     logger.info("=== %s detenido ===", settings.app_name)
 
 
@@ -46,19 +53,27 @@ app.include_router(matching_router, prefix="/api")
 app.include_router(transactions_router, prefix="/api")
 app.include_router(audit_router, prefix="/api")
 app.include_router(dashboard_router, prefix="/api")
+app.include_router(observability_router, prefix="/api")
+app.include_router(prometheus_router)  # GET /metrics, formato Prometheus
 
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Registra método, ruta, código de respuesta y duración de cada request."""
-    start = time.time()
-    response = await call_next(request)
-    duration_ms = round((time.time() - start) * 1000, 2)
-    logger.info(
-        "%s %s -> %s (%sms)",
-        request.method, request.url.path, response.status_code, duration_ms,
-    )
-    return response
+    """Registra método, ruta, código de respuesta y duración de cada request,
+    en el log y en las métricas de rendimiento."""
+    start = time.perf_counter()
+    status = 500  # si la petición revienta, cuenta como error
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        return response
+    finally:
+        seconds = time.perf_counter() - start
+        # Plantilla de la ruta (/api/orders/{order_id}) y no la URL concreta:
+        # así las métricas no crean una serie por cada id
+        route = getattr(request.scope.get("route"), "path", None) or "sin_ruta"
+        metrics.observe_http(request.method, route, status, seconds)
+        logger.info("%s %s -> %s (%sms)", request.method, request.url.path, status, round(seconds * 1000, 2))
 
 
 # CORS se agrega AL FINAL a propósito: en Starlette el último middleware

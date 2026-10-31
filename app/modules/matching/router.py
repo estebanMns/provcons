@@ -8,6 +8,7 @@ from app.modules.matching.ai_review import AIProductReviewer
 from app.modules.matching.matchers import LocalMaterialMatcher, MaterialMatcher, ResilientMatcher
 from app.infrastructure.matching_engine_client import GrpcMaterialMatcher
 from app.core.config import settings
+from app.core.metrics import metrics
 from app.modules.matching.schemas import (
     QuotationCreate, QuotationOut, QuotationComparisonOut, QuotationUploadOut, QuotationSummaryOut,
 )
@@ -28,7 +29,7 @@ router = APIRouter(prefix="/matching", tags=["Matching y recomendación"])
 _engine = GrpcMaterialMatcher(settings.matching_engine_addr, settings.matching_engine_timeout)
 _matcher: MaterialMatcher = (
     LocalMaterialMatcher() if settings.matching_engine_mode == "local"
-    else ResilientMatcher(primary=_engine, fallback=LocalMaterialMatcher())
+    else ResilientMatcher(primary=_engine, fallback=LocalMaterialMatcher(), on_fallback=metrics.engine_fallback)
 )
 
 

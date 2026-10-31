@@ -1,10 +1,12 @@
 """Cliente gRPC del motor de comparación (adaptador de MaterialMatcher)."""
 
 import asyncio
+import time
 
 import grpc
 from grpc_health.v1 import health_pb2, health_pb2_grpc
 
+from app.core.metrics import metrics
 from app.grpc_engine.generated import matching_engine_pb2 as pb
 from app.grpc_engine.generated import matching_engine_pb2_grpc as pb_grpc
 from app.modules.matching.matchers import NamedItem, PairScore, Similarities
@@ -40,7 +42,13 @@ class GrpcMaterialMatcher:
         )
         # timeout = deadline de gRPC: si el motor no responde a tiempo la
         # llamada falla y ResilientMatcher calcula localmente.
-        response = await self._stub().ComputeSimilarities(request, timeout=self.timeout_seconds)
+        started = time.perf_counter()
+        try:
+            response = await self._stub().ComputeSimilarities(request, timeout=self.timeout_seconds)
+        except Exception:
+            metrics.observe_grpc("ComputeSimilarities", time.perf_counter() - started, ok=False)
+            raise
+        metrics.observe_grpc("ComputeSimilarities", time.perf_counter() - started, ok=True)
         return {
             (p.item_id, p.product_id): PairScore(similarity=round(p.similarity, 3), specs_conflict=p.specs_conflict)
             for p in response.pairs

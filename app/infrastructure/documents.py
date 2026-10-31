@@ -5,6 +5,7 @@ convierte aquí a texto (una línea por fila, celdas separadas por " | ") y se
 manda como prompt de texto.
 """
 
+import asyncio
 from io import BytesIO
 
 from openpyxl import load_workbook
@@ -74,7 +75,9 @@ async def extract_json_from_upload(
     extension = (filename or "").rsplit(".", 1)[-1].lower() if "." in (filename or "") else ""
 
     if extension == "xlsx":
-        text = spreadsheet_to_text(file_bytes)
+        # Leer el Excel es CPU puro (openpyxl): en un hilo, para que el event
+        # loop siga atendiendo las demás peticiones mientras tanto
+        text = await asyncio.to_thread(spreadsheet_to_text, file_bytes)
         if not text.strip():
             raise ValidationError("La hoja de cálculo no tiene datos")
         logger.info("Excel convertido a texto: %s (%s caracteres)", filename, len(text))
