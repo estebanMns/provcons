@@ -2,18 +2,34 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useRole } from "@/context/RoleContext";
+import { Attention } from "@/components/ui/Attention";
 import { Icon } from "@/components/ui/Icon";
-import { getMe } from "@/lib/api";
-import type { User } from "@/lib/api";
+import { getDashboardSummary, getMe } from "@/lib/api";
+import type { DashboardSummary, User } from "@/lib/api";
+import type { IconName } from "@/lib/types";
+
+interface Notice { icon: IconName; title: string; text: string; href: string }
+
+// Avisos a partir del resumen: lo que la organización tiene pendiente
+function noticesFrom(summary: DashboardSummary): Notice[] {
+  const notices: Notice[] = [];
+  if (summary.role === "proveedor") {
+    if (summary.orders_to_confirm) notices.push({ icon: "warning", title: `${summary.orders_to_confirm} orden(es) por confirmar`, text: "Una constructora espera tu respuesta.", href: "/ordenes" });
+    if (summary.orders_to_ship) notices.push({ icon: "truck", title: `${summary.orders_to_ship} orden(es) por despachar`, text: "Márcalas en tránsito cuando salgan.", href: "/ordenes" });
+    if (summary.opportunities.length) notices.push({ icon: "spark", title: `${summary.opportunities.length} oportunidad(es) de venta`, text: "Cotizaciones abiertas donde coincide tu inventario.", href: "/dashboard" });
+  } else {
+    if (summary.awaiting_confirmation) notices.push({ icon: "truck", title: `${summary.awaiting_confirmation} orden(es) esperando al proveedor`, text: "Aún no las ha confirmado.", href: "/ordenes" });
+    if (summary.in_transit) notices.push({ icon: "truck", title: `${summary.in_transit} orden(es) en camino`, text: "El proveedor ya despachó.", href: "/ordenes" });
+    if (summary.open_quotations) notices.push({ icon: "file", title: `${summary.open_quotations} cotización(es) abierta(s)`, text: "Revisa la comparación y elige proveedor.", href: "/cotizaciones" });
+  }
+  return notices;
+}
 
 export function Topbar({ openMobile }: { openMobile: () => void }) {
-  const { role } = useRole();
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [showSearch, setShowSearch] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [notices, setNotices] = useState<Notice[] | null>(null);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     getMe().then(setUser).catch(() => {
@@ -21,212 +37,47 @@ export function Topbar({ openMobile }: { openMobile: () => void }) {
     });
   }, [router]);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      console.log("Búsqueda:", searchQuery);
-      // Aquí irá la lógica de búsqueda real
-      setShowSearch(false);
-      setSearchQuery("");
-    }
+  const refresh = () => {
+    getDashboardSummary().then((s) => setNotices(noticesFrom(s))).catch(() => setNotices([]));
   };
 
-  const notifications = [
-    { id: 1, message: "No hay notificaciones nuevas", time: "Hace un momento" }
-  ];
+  useEffect(refresh, []);
+
+  const toggle = () => {
+    if (!open) refresh();
+    setOpen(!open);
+  };
+
+  const go = (href: string) => {
+    setOpen(false);
+    router.push(href);
+  };
 
   return (
     <header className="topbar">
       <button className="mobile-menu" onClick={openMobile} aria-label="Abrir menú"><Icon name="menu" /></button>
       <div className="org-info">
         <strong>{user?.organization?.name || "Organización"}</strong>
-        <span><span className="status-dot" /> Organización verificada</span>
+        <span><span className="status-dot" /> {user?.organization?.type === "proveedor" ? "Proveedor" : "Constructora"}</span>
       </div>
-      <div className="top-actions">
-        <button
-          className="icon-btn"
-          aria-label="Buscar"
-          onClick={() => setShowSearch(!showSearch)}
-        >
-          <Icon name="search" />
+      <div className="top-actions" style={{ position: "relative" }}>
+        <button className={`icon-btn ${notices?.length ? "notification" : ""}`} aria-label="Pendientes" onClick={toggle}>
+          <Icon name="bell" />{notices?.length ? <span /> : null}
         </button>
-        <button
-          className="icon-btn notification"
-          aria-label="Notificaciones"
-          onClick={() => setShowNotifications(!showNotifications)}
-        >
-          <Icon name="bell" /><span />
-        </button>
-      </div>
-
-      {showSearch && (
-        <div className="search-modal" onClick={() => setShowSearch(false)}>
-          <div className="search-content" onClick={(e) => e.stopPropagation()}>
-            <form onSubmit={handleSearch}>
-              <Icon name="search" size={20} />
-              <input
-                type="text"
-                placeholder="Buscar órdenes, cotizaciones, proveedores..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                autoFocus
-              />
-              <button type="button" onClick={() => setShowSearch(false)} aria-label="Cerrar">
-                <Icon name="close" size={20} />
-              </button>
-            </form>
-            <div className="search-results">
-              {searchQuery ? (
-                <p style={{ padding: "1rem", color: "var(--text-secondary)" }}>
-                  No se encontraron resultados para &ldquo;{searchQuery}&rdquo;
-                </p>
-              ) : (
-                <p style={{ padding: "1rem", color: "var(--text-secondary)" }}>
-                  Escribe algo para buscar...
-                </p>
-              )}
+        {open && (
+          <>
+            <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setOpen(false)} />
+            <div className="card" style={{ position: "absolute", top: 48, right: 0, width: "min(340px, calc(100vw - 32px))", zIndex: 41, overflow: "hidden" }}>
+              <div className="card-head" style={{ minHeight: 0 }}><div><h2>Pendientes</h2><p>Lo que espera por tu organización</p></div></div>
+              {notices === null ? null : notices.length === 0 ? (
+                <p style={{ padding: 18, margin: 0, color: "var(--muted)", fontSize: 11 }}>Todo al día. No tienes pendientes.</p>
+              ) : notices.map((n) => (
+                <Attention key={n.title} icon={n.icon} title={n.title} text={n.text} time="" onClick={() => go(n.href)} />
+              ))}
             </div>
-          </div>
-        </div>
-      )}
-
-      {showNotifications && (
-        <div className="notifications-panel">
-          <div className="notifications-header">
-            <h3>Notificaciones</h3>
-            <button onClick={() => setShowNotifications(false)} aria-label="Cerrar">
-              <Icon name="close" size={18} />
-            </button>
-          </div>
-          <div className="notifications-list">
-            {notifications.map((notif) => (
-              <div key={notif.id} className="notification-item">
-                <div>
-                  <p>{notif.message}</p>
-                  <small>{notif.time}</small>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <style jsx>{`
-        .search-modal {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.5);
-          display: flex;
-          align-items: flex-start;
-          justify-content: center;
-          padding-top: 100px;
-          z-index: 1000;
-        }
-
-        .search-content {
-          background: white;
-          border-radius: 8px;
-          width: 90%;
-          max-width: 600px;
-          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-          overflow: hidden;
-        }
-
-        .search-content form {
-          display: flex;
-          align-items: center;
-          padding: 1rem;
-          border-bottom: 1px solid var(--border-color);
-          gap: 0.5rem;
-        }
-
-        .search-content input {
-          flex: 1;
-          border: none;
-          outline: none;
-          font-size: 1rem;
-          padding: 0.5rem;
-        }
-
-        .search-content button {
-          background: none;
-          border: none;
-          cursor: pointer;
-          padding: 0.5rem;
-          display: flex;
-          align-items: center;
-        }
-
-        .search-results {
-          max-height: 400px;
-          overflow-y: auto;
-        }
-
-        .notifications-panel {
-          position: absolute;
-          top: 60px;
-          right: 20px;
-          background: white;
-          border-radius: 8px;
-          width: 350px;
-          max-height: 400px;
-          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
-          z-index: 100;
-          display: flex;
-          flex-direction: column;
-        }
-
-        .notifications-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 1rem;
-          border-bottom: 1px solid var(--border-color);
-        }
-
-        .notifications-header h3 {
-          margin: 0;
-          font-size: 1rem;
-        }
-
-        .notifications-header button {
-          background: none;
-          border: none;
-          cursor: pointer;
-          padding: 0.5rem;
-          display: flex;
-          align-items: center;
-        }
-
-        .notifications-list {
-          overflow-y: auto;
-          flex: 1;
-        }
-
-        .notification-item {
-          padding: 1rem;
-          border-bottom: 1px solid var(--border-color);
-          cursor: pointer;
-          transition: background 0.2s;
-        }
-
-        .notification-item:hover {
-          background: var(--bg-secondary);
-        }
-
-        .notification-item p {
-          margin: 0 0 0.5rem 0;
-          font-size: 0.95rem;
-        }
-
-        .notification-item small {
-          color: var(--text-secondary);
-          font-size: 0.85rem;
-        }
-      `}</style>
+          </>
+        )}
+      </div>
     </header>
   );
 }

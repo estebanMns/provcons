@@ -59,9 +59,13 @@ export function Sidebar({ mobileOpen, closeMobile }: SidebarProps) {
       </nav>
       <div className="side-help">
         <span className="help-icon"><Icon name="spark" size={18} /></span>
-        <strong>¿Necesitas ayuda?</strong>
-        <p>Te acompañamos paso a paso.</p>
-        <button type="button">Ir al centro de ayuda <Icon name="arrow" size={15} /></button>
+        <strong>¿Cómo funciona?</strong>
+        <p>{isProvider
+          ? "1. Sube tu catálogo (PDF, Excel o foto). 2. La IA te incluye en las comparaciones. 3. Confirma y despacha las órdenes."
+          : "1. Sube tu lista de materiales. 2. Compara proveedores y precios. 3. Elige y crea la orden."}</p>
+        <button type="button" onClick={() => { router.push(isProvider ? "/inventario" : "/cotizaciones"); closeMobile(); }}>
+          {isProvider ? "Ir a mi inventario" : "Ir a cotizaciones"} <Icon name="arrow" size={15} />
+        </button>
       </div>
       <button className="user-card" onClick={handleLogoutClick} aria-label="Cerrar sesión">
         <span className="avatar">{user?.full_name?.slice(0, 2).toUpperCase() || "U"}</span>

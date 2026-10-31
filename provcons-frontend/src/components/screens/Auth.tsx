@@ -25,6 +25,7 @@ export function Auth() {
 
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const [signupOrgName, setSignupOrgName] = useState("");
   const [signupTaxId, setSignupTaxId] = useState("");
@@ -60,7 +61,7 @@ export function Auth() {
     setError("");
     setLoading(true);
     try {
-      const user = await signup({
+      await signup({
         organization_name: signupOrgName,
         organization_type: authRole,
         tax_id: signupTaxId,
@@ -68,7 +69,9 @@ export function Auth() {
         email: signupEmail,
         password: signupPassword,
       });
-      // No guardar token aquí, el usuario va a ready y luego puede login
+      // Se inicia sesión de una vez: los botones de la pantalla de bienvenida
+      // llevan a páginas protegidas.
+      setToken(await login({ email: signupEmail, password: signupPassword }));
       setStep("ready");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Error al crear la organización";
@@ -128,18 +131,23 @@ export function Auth() {
       </aside>
       <main className="auth-main">
         <div className="auth-card">
-          <button className="auth-back" onClick={() => (step === "register" ? setStep("login") : enter("proveedor"))}>
-            <Icon name="arrow" size={16} /> {step === "register" ? "Volver" : "Volver a la demo"}
-          </button>
+          {step === "register" && (
+            <button className="auth-back" onClick={() => { setStep("login"); setError(""); }}>
+              <Icon name="arrow" size={16} /> Volver
+            </button>
+          )}
           <p className="eyebrow">{step === "login" ? "ACCESO SEGURO" : "CREAR ORGANIZACIÓN"}</p>
           <h2>{step === "login" ? "Bienvenido de nuevo" : "Cuéntanos sobre tu empresa"}</h2>
           <p>{step === "login" ? "Ingresa con tu correo corporativo." : "Usaremos estos datos para configurar tu experiencia."}</p>
-          {error && <div style={{ color: "red", marginBottom: "1rem" }}>{error}</div>}
+          {error && <div style={{ color: "var(--danger)", marginBottom: "1rem", fontSize: 12 }}>{error}</div>}
           {step === "login" ? (
             <>
               <label>Correo corporativo<input type="email" placeholder="nombre@empresa.com" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} disabled={loading} /></label>
-              <label>Contraseña<div className="password-field"><input type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} disabled={loading} /><button type="button">Mostrar</button></div></label>
-              <div className="login-options"><label><input type="checkbox" defaultChecked /> Recordarme</label><button type="button">Olvidé mi contraseña</button></div>
+              <label>Contraseña<div className="password-field"><input type={showPassword ? "text" : "password"} value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleLogin()} disabled={loading} /><button type="button" onClick={() => setShowPassword((v) => !v)}>{showPassword ? "Ocultar" : "Mostrar"}</button></div></label>
+              <div className="login-options">
+                <span />
+                <button type="button" onClick={() => setError("La recuperación de contraseña aún no está disponible. Pide al administrador de tu organización que te ayude.")}>Olvidé mi contraseña</button>
+              </div>
               <Button wide onClick={handleLogin} disabled={loading}>{loading ? "Ingresando..." : "Ingresar a ProvCons"}</Button>
               <div className="auth-divider"><span /> o <span /></div>
               <button className="create-account" onClick={() => { setStep("register"); setError(""); }} disabled={loading}>Crear una organización nueva <Icon name="arrow" size={15} /></button>
