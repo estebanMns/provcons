@@ -1,4 +1,4 @@
-from sqlalchemy import String, Integer, ForeignKey, select
+from sqlalchemy import String, Integer, ForeignKey, select, or_
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,6 +33,26 @@ class AuditRepository:
         await self.db.commit()
         await self.db.refresh(entry)
         return entry
+
+    async def list_for_organization(
+        self, org_id: int, limit: int, offset: int, action_prefixes: tuple[str, ...] | None = None,
+    ) -> list[AuditLog]:
+        """Eventos que hizo la organización y, además, los de órdenes en las
+        que participa (el proveedor ve cuando la constructora le crea una
+        orden, y viceversa). Del más reciente al más antiguo."""
+        from app.modules.transactions.models import Order  # evita import circular con los modelos
+
+        org_orders = select(Order.id).where((Order.constructora_org_id == org_id) | (Order.provider_org_id == org_id))
+        query = select(AuditLog).where(
+            (AuditLog.actor_organization_id == org_id)
+            | ((AuditLog.resource_type == "Order") & AuditLog.resource_id.in_(org_orders))
+        )
+        if action_prefixes:
+            query = query.where(or_(*(AuditLog.action.startswith(p) for p in action_prefixes)))
+        result = await self.db.execute(
+            query.order_by(AuditLog.created_at.desc(), AuditLog.id.desc()).limit(limit).offset(offset)
+        )
+        return list(result.scalars().all())
 
     async def list_by_resource(self, resource_type: str, resource_id: int) -> list[AuditLog]:
         result = await self.db.execute(

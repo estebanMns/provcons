@@ -288,6 +288,26 @@ export async function uploadInventoryFile(
   return response.json();
 }
 
+export type AuditCategory = "ordenes" | "cotizaciones" | "inventario" | "cuenta";
+
+export interface AuditEntry {
+  id: number;
+  created_at: string;
+  action: string;
+  resource_type: string;
+  resource_id: number | null;
+  actor_name: string | null;
+  actor_organization_name: string | null;
+  own_organization: boolean;  // false = la hizo la otra parte de una orden
+  description: string;
+}
+
+export async function listActivity(offset = 0, limit = 50, category?: AuditCategory): Promise<AuditEntry[]> {
+  const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
+  if (category) params.set("category", category);
+  return fetchAPI<AuditEntry[]>(`/audit?${params}`);
+}
+
 export type OrderStatus = "pendiente" | "confirmada" | "en_transito" | "entregada" | "cancelada";
 export type PaymentTerms = "contado" | "cuotas";
 
