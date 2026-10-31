@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     # GEMINI_API_KEY, se usa solo la comparación por texto)
     matching_ai_review: bool = True
 
+    # Motor de comparación: "grpc" = microservicio (app/grpc_engine, con
+    # respaldo local si no responde); "local" = en el mismo proceso
+    matching_engine_mode: str = "grpc"
+    matching_engine_addr: str = "127.0.0.1:50051"
+    matching_engine_timeout: float = 10.0
+
     # Base de datos - Se carga del .env
     database_url: str
 

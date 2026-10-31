@@ -2,8 +2,9 @@ from app.modules.matching.repository import QuotationRepository, MatchRepository
 from app.modules.matching.models import Quotation, QuotationItem, Match, QuotationStatus
 from app.modules.matching.scoring import ScoringStrategy, OfferContext
 from app.modules.matching.comparison import ScoredOffer, build_comparison
-from app.modules.matching.text_matching import MATCH_THRESHOLD, material_similarity, specs_conflict, units_compatible
+from app.modules.matching.text_matching import MATCH_THRESHOLD, units_compatible
 from app.modules.matching.ai_review import AIProductReviewer, ProductReview, ReviewResult, decide_similarity
+from app.modules.matching.matchers import NO_MATCH, LocalMaterialMatcher, MaterialMatcher
 from app.modules.documents_ai.models import ProviderInventoryItem
 from app.core.audit import AuditService
 from app.core.exceptions import NotFoundError, ForbiddenError
@@ -17,12 +18,15 @@ class MatchingService:
         self, quotation_repo: QuotationRepository, match_repo: MatchRepository,
         scoring_strategy: ScoringStrategy, audit: AuditService,
         reviewer: AIProductReviewer | None = None,
+        matcher: MaterialMatcher | None = None,
     ):
         self.quotation_repo = quotation_repo
         self.match_repo = match_repo
         self.scoring_strategy = scoring_strategy
         self.audit = audit
         self.reviewer = reviewer  # None = solo comparación por texto
+        # Cómo se calcula la similitud (local o microservicio gRPC): se inyecta
+        self.matcher = matcher or LocalMaterialMatcher()
 
     async def create_quotation(
     self, constructora_org_id: int, title: str, items_data: list[dict], actor_user_id: int,
@@ -89,20 +93,16 @@ class MatchingService:
 
     @staticmethod
     def _lexical_candidates(
-        items: list[QuotationItem], products: list[ProviderInventoryItem],
-    ) -> tuple[dict[tuple[int, int], float], dict[int, list[ProviderInventoryItem]]]:
-        """Similitud por texto de cada par (pedido, producto) y, por ítem, los
-        productos que el texto considera candidatos (para que la IA los confirme
-        o los descarte)."""
-        similarity: dict[tuple[int, int], float] = {}
+        items: list[QuotationItem], products: list[ProviderInventoryItem], scores,
+    ) -> dict[int, list[ProviderInventoryItem]]:
+        """Por ítem, los productos que la comparación por texto considera
+        candidatos (para que la IA los confirme o los descarte)."""
         candidates: dict[int, list[ProviderInventoryItem]] = {}
         for item in items:
             for product in products:
-                score = material_similarity(item.material_name, product.material_name)
-                similarity[(item.id, product.id)] = score
-                if score >= MATCH_THRESHOLD:
+                if scores.get((item.id, product.id), NO_MATCH).similarity >= MATCH_THRESHOLD:
                     candidates.setdefault(item.id, []).append(product)
-        return similarity, candidates
+        return candidates
 
     @staticmethod
     def _best_offer_per_provider(
@@ -126,7 +126,13 @@ class MatchingService:
         await self.match_repo.delete_unordered_for_items([item.id for item in items])
 
         products = await self.match_repo.list_inventory()
-        lexical, lexical_candidates = self._lexical_candidates(items, products)
+        # Similitud por texto de todos los pares: la calcula el matcher
+        # inyectado (microservicio gRPC o en el mismo proceso)
+        scores = await self.matcher.compute(
+            [(item.id, item.material_name) for item in items],
+            [(product.id, product.material_name) for product in products],
+        )
+        lexical_candidates = self._lexical_candidates(items, products, scores)
         if self.reviewer is not None:
             review = await self.reviewer.review(items, products, lexical_candidates)
         else:
@@ -140,10 +146,10 @@ class MatchingService:
             accepted = []
             for product in products:
                 product_review = review.reviews.get((item.id, product.id))
-                lexical_score = lexical[(item.id, product.id)]
+                pair = scores.get((item.id, product.id), NO_MATCH)
+                lexical_score = pair.similarity
                 similarity, method = decide_similarity(
-                    lexical_score, specs_conflict(item.material_name, product.material_name),
-                    product_review, MATCH_THRESHOLD,
+                    lexical_score, pair.specs_conflict, product_review, MATCH_THRESHOLD,
                 )
                 if method == "descartado_por_ia" and lexical_score >= MATCH_THRESHOLD:
                     rejected_by_ai.add((item.id, product.provider_org_id))

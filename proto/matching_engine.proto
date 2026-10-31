@@ -1,0 +1,37 @@
+// Contrato del motor de comparación de materiales.
+//
+// El cálculo de similitud entre los materiales pedidos y el catálogo de los
+// proveedores (materiales x productos) es la parte más pesada del matching y
+// es lógica pura: por eso vive en un microservicio aparte al que FastAPI llama
+// por gRPC. Para regenerar el código Python: scripts/gen_proto.ps1
+syntax = "proto3";
+
+package provcons.matching.v1;
+
+service MatchingEngine {
+  // Similitud por texto de cada par (material pedido, producto del catálogo).
+  rpc ComputeSimilarities(SimilarityRequest) returns (SimilarityResponse);
+}
+
+message Material {
+  int64 id = 1;
+  string name = 2;
+}
+
+message SimilarityRequest {
+  repeated Material items = 1;     // materiales pedidos por la constructora
+  repeated Material products = 2;  // productos del inventario de los proveedores
+}
+
+message PairScore {
+  int64 item_id = 1;
+  int64 product_id = 2;
+  double similarity = 3;    // 0 a 1
+  bool specs_conflict = 4;  // misma medida con valores distintos (1/2" vs 3/8")
+}
+
+message SimilarityResponse {
+  // Solo los pares con similitud > 0 o con conflicto de medidas; los que no
+  // vienen valen similitud 0 y sin conflicto (así la respuesta es pequeña).
+  repeated PairScore pairs = 1;
+}

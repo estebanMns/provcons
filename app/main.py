@@ -11,7 +11,7 @@ from app.core.logging import configure_logging, get_logger
 
 from app.modules.users.router import router as users_router
 from app.modules.documents_ai.router import router as documents_ai_router
-from app.modules.matching.router import router as matching_router
+from app.modules.matching.router import router as matching_router, matching_engine_status
 from app.modules.transactions.router import router as transactions_router
 from app.modules.audit.router import router as audit_router
 from app.modules.dashboard.router import router as dashboard_router
@@ -91,4 +91,6 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    # La API responde "ok" aunque el motor gRPC esté caído (hay respaldo
+    # local); el estado del motor se informa aparte.
+    return {"status": "ok", "matching_engine": await matching_engine_status()}

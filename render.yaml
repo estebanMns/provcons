@@ -9,7 +9,8 @@ services:
     region: ohio  # misma región que la base de datos RDS (us-east-2)
     branch: main
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    # Motor gRPC + API en el mismo contenedor (el plan gratuito permite un solo servicio)
+    startCommand: bash scripts/start.sh
     healthCheckPath: /health
     autoDeploy: true
     envVars:

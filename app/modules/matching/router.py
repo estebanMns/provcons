@@ -5,6 +5,8 @@ from app.modules.matching.repository import QuotationRepository, MatchRepository
 from app.modules.matching.service import MatchingService
 from app.modules.matching.scoring import ComparativeScoringStrategy
 from app.modules.matching.ai_review import AIProductReviewer
+from app.modules.matching.matchers import LocalMaterialMatcher, MaterialMatcher, ResilientMatcher
+from app.infrastructure.matching_engine_client import GrpcMaterialMatcher
 from app.core.config import settings
 from app.modules.matching.schemas import (
     QuotationCreate, QuotationOut, QuotationComparisonOut, QuotationUploadOut, QuotationSummaryOut,
@@ -22,7 +24,21 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/matching", tags=["Matching y recomendación"])
 
 
+# Uno por proceso: así el canal gRPC se reutiliza entre peticiones
+_engine = GrpcMaterialMatcher(settings.matching_engine_addr, settings.matching_engine_timeout)
+_matcher: MaterialMatcher = (
+    LocalMaterialMatcher() if settings.matching_engine_mode == "local"
+    else ResilientMatcher(primary=_engine, fallback=LocalMaterialMatcher())
+)
+
+
+async def matching_engine_status() -> str:
+    """Para /health: "local" o el estado del health check gRPC del motor."""
+    return "local" if settings.matching_engine_mode == "local" else await _engine.health()
+
+
 def get_matching_service(db: AsyncSession = Depends(get_db)) -> MatchingService:
+    """Factory: arma el servicio con sus dependencias concretas."""
     audit = AuditService(AuditRepository(db))
     reviewer = AIProductReviewer(AIClient()) if settings.matching_ai_review and settings.gemini_api_key else None
     return MatchingService(
@@ -30,6 +46,7 @@ def get_matching_service(db: AsyncSession = Depends(get_db)) -> MatchingService:
         scoring_strategy=ComparativeScoringStrategy(),
         audit=audit,
         reviewer=reviewer,
+        matcher=_matcher,
     )
 
 
