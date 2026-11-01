@@ -199,6 +199,63 @@ export async function rerunComparison(quotationId: number): Promise<QuotationRes
   return fetchAPI<QuotationResult>(`/matching/quotations/${quotationId}/run`, { method: "POST" });
 }
 
+// Predicción del resultado futuro de cada opción de compra. Las cifras las
+// calcula el backend con el historial; la IA solo redacta los textos.
+export interface DeliveryDays { median: number; p25: number; p75: number }
+export type ForecastConfidence = "baja" | "media" | "alta";
+
+export interface ProviderProfile {
+  provider_org_id: number;
+  provider_name: string;
+  orders_closed: number;
+  orders_delivered: number;
+  orders_rejected: number;
+  orders_open: number;
+  orders_with_you: number;
+  reliability: number;
+  confidence: ForecastConfidence;
+  delivery_days: DeliveryDays | null;
+  price_trend_pct_30d: number | null;
+  market_premium_pct: number | null;
+  unit_mismatches: number;
+}
+
+export interface ForecastOption {
+  key: string;
+  label: string;
+  kind: "proveedor" | "combinacion";
+  provider_org_ids: number[];
+  main_provider_id: number | null;
+  items_from_main: number;
+  complement_items: number;
+  cost_today: number;
+  expected_cost: number;
+  success_probability: number;
+  confidence: ForecastConfidence;
+  delivery_days: DeliveryDays | null;
+  shortfalls: { material_name: string; provider_name: string; missing_quantity: number; alternative_provider: string | null; extra_cost: number }[];
+  scenarios: Record<"optimista" | "probable" | "pesimista", { cost: number; days: number | null }>;
+  narrative: { que_pasara: string; riesgos: string[]; consejo: string };
+}
+
+export interface QuotationForecast {
+  quotation_id: number;
+  items_total: number;
+  items_unavailable: string[];
+  providers: ProviderProfile[];
+  options: ForecastOption[];
+  best_option_key: string | null;
+  current_recommendation_key: string | null;
+  summary: string;
+  narrative_source: "ia" | "plantilla";
+  generated_at: string;
+  cached: boolean;
+}
+
+export async function getForecast(quotationId: number): Promise<QuotationForecast> {
+  return fetchAPI<QuotationForecast>(`/matching/quotations/${quotationId}/forecast`);
+}
+
 export interface QuotationResult {
   quotation_id: number;
   title: string;

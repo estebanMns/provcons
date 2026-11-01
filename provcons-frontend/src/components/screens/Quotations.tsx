@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { ForecastPanel } from "@/components/quotations/ForecastPanel";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Criterion } from "@/components/ui/Criterion";
@@ -327,6 +328,9 @@ export function Quotations() {
                 )}
               </aside>
             </div>
+
+            {/* key: al recalcular la comparación cambian las ofertas y se vuelve a predecir */}
+            <ForecastPanel key={r.providers.flatMap((p) => p.match_ids).join(",")} quotationId={r.quotation_id} />
 
             <section className="card" style={{ marginTop: 18 }}>
               <div className="table-tools"><strong style={{ fontSize: 12 }}>Comparación por material</strong></div>

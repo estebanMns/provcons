@@ -19,6 +19,11 @@ from app.core.exceptions import ValidationError
 from app.infrastructure.ai_client import AIClient
 from app.infrastructure.documents import extract_json_from_upload
 from app.core.logging import get_logger
+from app.modules.forecast.narrator import AIForecastNarrator, TemplateNarrator
+from app.modules.forecast.predictors import StatisticalForecastModel
+from app.modules.forecast.repository import ProviderHistoryRepository
+from app.modules.forecast.schemas import QuotationForecastOut
+from app.modules.forecast.service import ForecastCache, ForecastService
 
 logger = get_logger(__name__)
 
@@ -48,6 +53,20 @@ def get_matching_service(db: AsyncSession = Depends(get_db)) -> MatchingService:
         audit=audit,
         reviewer=reviewer,
         matcher=_matcher,
+    )
+
+
+_forecast_cache = ForecastCache()
+
+
+def get_forecast_service(
+    db: AsyncSession = Depends(get_db),
+    matching: MatchingService = Depends(get_matching_service),
+) -> ForecastService:
+    narrator = AIForecastNarrator(AIClient()) if settings.gemini_api_key else TemplateNarrator()
+    return ForecastService(
+        matching, ProviderHistoryRepository(db),
+        model=StatisticalForecastModel(), narrator=narrator, cache=_forecast_cache,
     )
 
 
@@ -109,6 +128,18 @@ async def get_comparison(
 ):
     """Comparación guardada de una cotización (no vuelve a llamar a la IA)."""
     return await service.get_comparison(quotation_id, current_user.organization_id)
+
+
+@router.get("/quotations/{quotation_id}/forecast", response_model=QuotationForecastOut)
+async def get_forecast(
+    quotation_id: int,
+    service: ForecastService = Depends(get_forecast_service),
+    current_user: User = Depends(get_current_user),
+):
+    """Predice qué pasará con cada opción de compra: probabilidad de que el
+    proveedor cumpla, días de entrega y costo esperado contando el riesgo,
+    con una explicación redactada por la IA. Solo lee datos."""
+    return await service.forecast(quotation_id, current_user.organization_id)
 
 
 @router.post("/quotations/{quotation_id}/run", response_model=QuotationComparisonOut)

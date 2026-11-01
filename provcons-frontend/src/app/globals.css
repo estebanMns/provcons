@@ -265,6 +265,37 @@ td .small-input { min-width: 60px; max-width: 70px; }
 .match-bottom > div:first-child strong { font-size: 14px; margin-top: 3px; }
 .match-tags { display: flex; gap: 5px; }
 .quote-summary { padding: 20px; position: sticky; top: 92px; }
+
+/* Predicción a futuro (panel de la comparación) */
+.forecast-panel { margin-top: 18px; padding: 20px; }
+.forecast-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; color: var(--brand); }
+.forecast-head > div { flex: 1; }
+.forecast-head h2 { margin: 2px 0 0; font-size: 16px; color: var(--ink); }
+.forecast-muted { color: var(--muted); font-size: 11px; margin: 0; }
+.forecast-best { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 18px; padding: 16px; margin-bottom: 16px; background: var(--brand-soft); border: 1px solid #cee2dc; border-radius: var(--radius); }
+.forecast-best h3 { margin: 4px 0 6px; font-size: 18px; }
+.forecast-best p { margin: 0; font-size: 12px; color: var(--ink-soft); }
+.forecast-label { font-size: 10px; font-weight: 700; letter-spacing: .06em; color: var(--brand); }
+.forecast-note { margin-top: 8px !important; padding: 8px 10px; background: var(--surface); border-radius: var(--radius-sm); }
+.forecast-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.forecast-kpis span { display: flex; flex-direction: column; gap: 3px; padding: 10px; background: var(--surface); border-radius: var(--radius-sm); font-size: 10px; color: var(--muted); }
+.forecast-kpis strong { font-size: 14px; color: var(--ink); }
+.forecast-row-best td { background: var(--success-soft); }
+.forecast-toggle { border: 1px solid var(--line); background: var(--surface); color: var(--brand); border-radius: var(--radius-sm); padding: 5px 9px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.forecast-toggle:hover { background: var(--brand-soft); }
+.forecast-detail td { background: var(--surface-soft); white-space: normal; }
+.forecast-detail p { margin: 0 0 10px; font-size: 12px; }
+.forecast-detail ul { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 11px; color: var(--warning); }
+.forecast-detail li, .forecast-advice { display: flex; align-items: flex-start; gap: 6px; }
+.forecast-detail li svg, .forecast-advice svg { flex: none; margin-top: 2px; }
+.forecast-advice { color: var(--success); font-weight: 600; margin-top: 10px !important; }
+.forecast-scenarios { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.forecast-scenarios div { display: flex; flex-direction: column; gap: 2px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); }
+.forecast-scenarios span, .forecast-scenarios small { font-size: 10px; color: var(--muted); }
+.forecast-skeleton { height: 70px; border-radius: var(--radius); background: linear-gradient(90deg, var(--line-soft), var(--surface-soft), var(--line-soft)); background-size: 200% 100%; animation: forecast-shimmer 1.4s infinite; margin-bottom: 10px; }
+.forecast-skeleton.short { height: 120px; }
+@keyframes forecast-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .forecast-skeleton { animation: none; } }
 .quote-summary h2 { font-size: 16px; margin: 5px 0; }
 .quote-summary > span { color: var(--muted); font-size: 9px; }
 .quote-summary > div:not(.location) { margin: 20px 0 14px; }
@@ -456,6 +487,11 @@ td .small-input { min-width: 60px; max-width: 70px; }
   .upload-card, .processing-card { min-height: 400px; padding: 35px 20px; }
   .upload-card h2, .processing-card h2 { font-size: 18px; }
   .review-summary { align-items: flex-start; flex-direction: column; }
+  .forecast-best { grid-template-columns: 1fr; }
+  .forecast-scenarios { grid-template-columns: 1fr; }
+  .forecast-head { flex-wrap: wrap; }
+  /* El detalle va dentro de la tabla con scroll: se queda fijo al ancho de la pantalla */
+  .forecast-detail-body { position: sticky; left: 12px; max-width: calc(100vw - 90px); }
   .table-tools { flex-direction: column; }
   .search-field { min-width: 0; width: 100%; }
   .table-scroll { overflow-x: auto; }

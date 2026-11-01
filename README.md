@@ -2,28 +2,30 @@
 
 Plataforma B2B para el sector construcción que conecta constructoras con proveedores de materiales.
 
-- **Constructora:** sube su lista de materiales en PDF, Excel o foto. La app compara proveedores por precio, stock y cobertura, le recomienda a quién comprarle y le permite crear la orden.
+- **Constructora:** sube su lista de materiales en PDF, Excel o foto. La app compara proveedores por precio, stock y cobertura, le recomienda a quién comprarle, **predice qué pasará a futuro con cada opción** (si el proveedor cumplirá, cuándo llegará el pedido y cuánto costará de verdad) y le permite crear la orden.
 - **Proveedor:** sube su catálogo en el mismo formato. Ve las oportunidades de venta en las cotizaciones abiertas y confirma y despacha las órdenes que recibe.
 
 ## Contenido
 
 1. [Cómo funciona](#cómo-funciona)
 2. [Arquitectura](#arquitectura)
-3. [Principios SOLID, patrones y buenas prácticas](#principios-solid-patrones-y-buenas-prácticas)
-4. [gRPC: el motor de comparación](#grpc-el-motor-de-comparación)
-5. [Event loop y concurrencia](#event-loop-y-concurrencia)
-6. [Métricas de rendimiento](#métricas-de-rendimiento)
-7. [Patrones de rendering](#patrones-de-rendering)
-8. [Web Workers](#web-workers)
-9. [Correr el proyecto en local](#correr-el-proyecto-en-local)
-10. [Pruebas](#pruebas)
+3. [Predicción con IA](#predicción-con-ia)
+4. [Principios SOLID, patrones y buenas prácticas](#principios-solid-patrones-y-buenas-prácticas)
+5. [gRPC: el motor de comparación](#grpc-el-motor-de-comparación)
+6. [Event loop y concurrencia](#event-loop-y-concurrencia)
+7. [Métricas de rendimiento](#métricas-de-rendimiento)
+8. [Patrones de rendering](#patrones-de-rendering)
+9. [Web Workers](#web-workers)
+10. [Correr el proyecto en local](#correr-el-proyecto-en-local)
+11. [Pruebas](#pruebas)
 
 ## Cómo funciona
 
 1. **Lectura con IA (Gemini).** Extrae materiales, cantidades, unidades y precios de cada archivo. Los Excel se convierten a texto antes de enviarlos.
 2. **Comparación de materiales.** Compara nombres sin importar mayúsculas, tildes ni plurales, y respeta las medidas: una varilla de 1/2" no es una de 3/8". Este cálculo lo hace un microservicio gRPC. Después, una revisión con IA encuentra sinónimos ("acero de refuerzo" = "varilla corrugada") y descarta lo que solo se parece en el nombre.
 3. **Comparación de proveedores.** Califica cada oferta por compatibilidad, disponibilidad y precio frente a los demás proveedores. Arma un ranking, una recomendación y la "mejor combinación" (comprar cada material al más conveniente).
-4. **Órdenes.** Se crea una orden por proveedor, que guarda los precios del momento de la compra. El proveedor confirma, despacha y entrega. Todo queda en el historial de actividad.
+4. **Predicción a futuro.** Para cada opción de compra estima la probabilidad de que el proveedor cumpla, los días de entrega y el costo esperado contando el riesgo. Gemini lo explica en lenguaje claro. Ver [Predicción con IA](#predicción-con-ia).
+5. **Órdenes.** Se crea una orden por proveedor, que guarda los precios del momento de la compra. El proveedor confirma, despacha y entrega. Todo queda en el historial de actividad.
 
 ## Arquitectura
 
@@ -71,6 +73,33 @@ tests/             pruebas automáticas (pytest)
 provcons-frontend/ aplicación Next.js (src/app, src/components, src/lib, src/workers)
 ```
 
+## Predicción con IA
+
+La comparación dice quién es más barato **hoy**. La predicción responde qué le pasará a la constructora **después** de elegir: si el proveedor va a cumplir, cuándo llegará el pedido y cuánto terminará costando. Se ve en el panel "Predicción a futuro" de cada comparación y la entrega `GET /api/matching/quotations/{id}/forecast`.
+
+**Cómo se reparten el trabajo la estadística y la IA:**
+- **Las cifras las calcula el backend** ([`predictors.py`](app/modules/forecast/predictors.py)) con el historial real de órdenes. Son deterministas y verificables: los mismos datos dan siempre el mismo resultado.
+- **Gemini solo redacta** ([`narrator.py`](app/modules/forecast/narrator.py)): recibe las cifras ya calculadas y explica qué pasará con cada opción, sus riesgos y un consejo. La pantalla muestra siempre los números del backend, así que una cifra inventada por el modelo nunca llega al usuario.
+- **Sin IA también funciona:** si no hay API key o Gemini falla, `TemplateNarrator` arma la explicación con plantillas.
+
+**Qué se predice y cómo:**
+
+| Predicción | Cálculo | Fuente |
+|---|---|---|
+| Probabilidad de que el proveedor cumpla | `(entregadas + 3) / (entregadas + rechazadas + 4)`: un prior Beta, para que un proveedor nuevo arranque en 75 % y no en 0 % ni 100 % | Órdenes y rechazos (`audit_logs`, acción `order.rejected`) |
+| Confianza | `baja` con menos de 3 órdenes cerradas, `media` con menos de 10, `alta` con 10 o más | Órdenes cerradas |
+| Días de entrega | Mediana y rango p25–p75 | Tiempo entre la creación de la orden y `order.entregada` |
+| Tendencia de precio | Recta de mínimos cuadrados sobre los precios normalizados por material, en % cada 30 días | Precios congelados en `order_items` del último año |
+| Faltantes | Lo que el proveedor no tiene en stock se compra al siguiente más barato | Stock de la comparación |
+| **Costo esperado** | `costo hoy + faltantes + (1 − p) × sobrecosto de recomprar de urgencia al alternativo (+10 %)` | Todo lo anterior |
+| Escenarios | Optimista (cumple), probable (costo esperado) y pesimista (falla y se recompra, p75 + 3 días) | Todo lo anterior |
+
+Cada "opción" es un plan para comprar el pedido completo. Elegir un proveedor significa comprarle lo que tiene y completar lo que le falta con el más barato de los demás, así que todas las opciones son comparables. También se evalúa la mejor combinación. La **mejor opción a futuro** es la de menor costo esperado. Si no coincide con la recomendación de hoy, el panel explica por qué: por ejemplo, un proveedor 10 % más barato que rechaza la mitad de sus órdenes termina costando más.
+
+**Por qué estadística más LLM y no un modelo de ML entrenado:** hoy hay poco historial, y un modelo entrenado necesitaría datos que no existen o datos sintéticos. Además, el plan gratuito de Render tiene 512 MB de memoria. Este enfoque es explicable, se puede probar y mejora solo: la confianza sube a medida que se cierran órdenes. Si algún día hay datos suficientes, basta con otra implementación de `ForecastModel`.
+
+**Cuota gratuita de Gemini:** la predicción se guarda 15 minutos en una caché en memoria ([`service.py`](app/modules/forecast/service.py)). Reabrir la misma comparación no vuelve a llamar a la IA, y si las ofertas cambian la caché se invalida sola.
+
 ## Principios SOLID, patrones y buenas prácticas
 
 ### SOLID
@@ -78,22 +107,22 @@ provcons-frontend/ aplicación Next.js (src/app, src/components, src/lib, src/wo
 | Principio | Dónde está | Cómo se aplica |
 |---|---|---|
 | **S** — Responsabilidad única | Capas de cada módulo (`app/modules/*/router.py`, `service.py`, `repository.py`) | El router solo traduce HTTP, el service aplica las reglas de negocio y el repository solo habla con la base. Cada capa cambia por un único motivo. |
-| **O** — Abierto/cerrado | [`scoring.py`](app/modules/matching/scoring.py) (`ScoringStrategy`), [`matchers.py`](app/modules/matching/matchers.py) (`MaterialMatcher`) | Para cambiar el algoritmo de puntaje o la forma de comparar se agrega una implementación nueva; `MatchingService` no se toca. |
+| **O** — Abierto/cerrado | [`scoring.py`](app/modules/matching/scoring.py) (`ScoringStrategy`), [`matchers.py`](app/modules/matching/matchers.py) (`MaterialMatcher`), [`predictors.py`](app/modules/forecast/predictors.py) (`ForecastModel`) | Para cambiar el algoritmo de puntaje, la forma de comparar o el modelo de predicción se agrega una implementación nueva; los servicios no se tocan. |
 | **L** — Sustitución de Liskov | `GrpcMaterialMatcher` y `LocalMaterialMatcher` | Son intercambiables y dan el mismo resultado: la prueba [`test_grpc_engine.py`](tests/matching/test_grpc_engine.py) lo verifica. |
 | **I** — Segregación de interfaces | Protocolos pequeños (`MaterialMatcher.compute`, `ScoringStrategy.calculate`) | Cada componente depende solo del método que usa, no de clases grandes. |
-| **D** — Inversión de dependencias | `MatchingService`, `OrderService` e `InventoryService` reciben repositorios, matcher, IA y auditoría por constructor | Las reglas de negocio no dependen de gRPC, de Gemini ni de la base de datos concretos. Por eso las pruebas usan versiones falsas. |
+| **D** — Inversión de dependencias | `MatchingService`, `OrderService`, `InventoryService` y `ForecastService` reciben repositorios, matcher, IA y auditoría por constructor | Las reglas de negocio no dependen de gRPC, de Gemini ni de la base de datos concretos. Por eso las pruebas usan versiones falsas. |
 
 ### Patrones de diseño
 
 | Patrón | Dónde está | Para qué |
 |---|---|---|
 | Repository | `app/modules/*/repository.py` | Aísla el acceso a datos de las reglas de negocio. |
-| Strategy | `ScoringStrategy` → `ComparativeScoringStrategy` | Algoritmos de puntaje intercambiables. |
-| Adapter | [`ai_client.py`](app/infrastructure/ai_client.py), [`matching_engine_client.py`](app/infrastructure/matching_engine_client.py) | Ocultan las APIs de Gemini y de gRPC detrás de interfaces propias. |
-| Factory | `get_matching_service`, `get_order_service` (routers) | Arman cada servicio con sus dependencias concretas. |
+| Strategy | `ScoringStrategy` → `ComparativeScoringStrategy`; `ForecastModel` → `StatisticalForecastModel` | Algoritmos de puntaje y de predicción intercambiables. |
+| Adapter | [`ai_client.py`](app/infrastructure/ai_client.py), [`matching_engine_client.py`](app/infrastructure/matching_engine_client.py), `AIForecastNarrator` | Ocultan las APIs de Gemini y de gRPC detrás de interfaces propias. |
+| Factory | `get_matching_service`, `get_forecast_service`, `get_order_service` (routers) | Arman cada servicio con sus dependencias concretas. |
 | Facade | [`DashboardService`](app/modules/dashboard/service.py) | Una sola entrada para muchos cálculos del resumen. |
-| Circuit breaker simple / respaldo | `ResilientMatcher` | Si el motor gRPC no responde, la comparación se calcula localmente y la app sigue funcionando. |
-| Singleton | `metrics` ([`metrics.py`](app/core/metrics.py)) | Un único registro de métricas por proceso. |
+| Circuit breaker simple / respaldo | `ResilientMatcher`, `AIForecastNarrator` → `TemplateNarrator` | Si el motor gRPC no responde, la comparación se calcula localmente; si Gemini falla, la predicción se explica con plantillas. La app sigue funcionando. |
+| Singleton | `metrics` ([`metrics.py`](app/core/metrics.py)), caché de predicciones | Un único registro de métricas y una única caché por proceso. |
 | Chain of Responsibility (middleware) | [`main.py`](app/main.py): CORS y métricas | Cada petición pasa por una cadena de procesadores. |
 | Observer (callback) | `ResilientMatcher(on_fallback=...)` | Notifica a las métricas cuando se usa el respaldo, sin acoplarse a ellas. |
 | DTO | `app/modules/*/schemas.py` (Pydantic) | Validan y documentan lo que entra y sale de la API. |
