@@ -1,17 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { getToken } from "@/lib/api";
 
-// Única parte de la página de presentación que corre en el navegador: la
-// sesión está en localStorage, que no existe al generar el HTML estático.
-export function SessionCta() {
-  const [hasSession, setHasSession] = useState(false);
+// La sesión vive en localStorage (un "almacén externo" a React): se lee con
+// useSyncExternalStore. En el servidor (HTML estático de SSG) no hay sesión,
+// por eso getServerSnapshot devuelve false y el navegador lo ajusta al hidratar.
+const subscribe = (onChange: () => void) => {
+  window.addEventListener("storage", onChange);
+  return () => window.removeEventListener("storage", onChange);
+};
 
-  useEffect(() => {
-    setHasSession(Boolean(getToken()));
-  }, []);
+export function SessionCta() {
+  const hasSession = useSyncExternalStore(subscribe, () => Boolean(getToken()), () => false);
 
   return hasSession
     ? <Link className="btn btn-primary" href="/dashboard"><span>Ir a mi panel</span></Link>

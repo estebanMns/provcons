@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { listActivity } from "@/lib/api";
 import { buildCsvInWorker } from "@/lib/workers";
+import { formatDateTime } from "@/lib/format";
 import type { AuditCategory, AuditEntry } from "@/lib/api";
 
 const PAGE_SIZE = 50;
@@ -27,8 +28,6 @@ const CATEGORY_LABEL: Record<string, { label: string; tone: "info" | "success" |
   organization: { label: "Cuenta", tone: "neutral" },
 };
 
-const formatDateTime = (iso: string) =>
-  new Date(iso).toLocaleString("es-CO", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
 async function downloadCsv(entries: AuditEntry[]) {
   // El CSV se arma en un Web Worker: con miles de eventos no congela la pantalla
@@ -54,24 +53,46 @@ export function Audit() {
   const [error, setError] = useState("");
   const [exporting, setExporting] = useState(false);
 
-  const load = useCallback(async (offset: number, category: AuditCategory | "todo") => {
-    setLoading(true);
+  // Primera página de cada filtro: el estado solo cambia cuando llega la
+  // respuesta, y las respuestas de un filtro anterior se descartan
+  useEffect(() => {
+    let cancelled = false;
+    listActivity(0, PAGE_SIZE, filter === "todo" ? undefined : filter)
+      .then((page) => {
+        if (cancelled) return;
+        setEntries(page);
+        setHasMore(page.length === PAGE_SIZE);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : "No se pudo cargar el historial");
+        setEntries([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [filter]);
+
+  const changeFilter = (next: AuditCategory | "todo") => {
+    if (next === filter) return;
+    setEntries(null); // muestra "Cargando…" mientras llega el nuevo filtro
     setError("");
+    setFilter(next);
+  };
+
+  const loadMore = async () => {
+    if (!entries) return;
+    setLoading(true);
     try {
-      const page = await listActivity(offset, PAGE_SIZE, category === "todo" ? undefined : category);
-      setEntries((current) => (offset === 0 ? page : [...(current ?? []), ...page]));
+      const page = await listActivity(entries.length, PAGE_SIZE, filter === "todo" ? undefined : filter);
+      setEntries((current) => [...(current ?? []), ...page]);
       setHasMore(page.length === PAGE_SIZE);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo cargar el historial");
-      setEntries((current) => current ?? []);
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  useEffect(() => {
-    load(0, filter);
-  }, [filter, load]);
+  };
 
   return (
     <div className="page narrow-page">
@@ -105,7 +126,7 @@ export function Audit() {
           {FILTERS.map((f) => (
             <button
               key={f.id}
-              onClick={() => setFilter(f.id)}
+              onClick={() => changeFilter(f.id)}
               style={filter === f.id ? { background: "white", color: "var(--brand)", fontWeight: 700, boxShadow: "var(--shadow)" } : { background: "transparent", boxShadow: "none", fontWeight: 400 }}
             >
               {f.label}
@@ -155,7 +176,7 @@ export function Audit() {
           </div>
           {hasMore && (
             <div className="card-actions" style={{ justifyContent: "center" }}>
-              <Button variant="secondary" onClick={() => load(entries.length, filter)} disabled={loading}>
+              <Button variant="secondary" onClick={loadMore} disabled={loading}>
                 {loading ? "Cargando…" : "Cargar más"}
               </Button>
             </div>

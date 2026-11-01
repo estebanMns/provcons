@@ -7,25 +7,9 @@ import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { advanceOrder, cancelOrder, confirmOrder, getMe, listOrders } from "@/lib/api";
 import type { Order, OrderStatus, User } from "@/lib/api";
+import { formatCOP, formatDate } from "@/lib/format";
+import { ORDER_STATUS } from "@/lib/orderStatus";
 
-const copFormatter = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
-const formatCOP = (value: number) => copFormatter.format(value);
-const formatDate = (iso: string) => new Date(iso).toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" });
-
-const STATUS_LABEL: Record<OrderStatus, string> = {
-  pendiente: "Esperando confirmación",
-  confirmada: "Confirmada",
-  en_transito: "En tránsito",
-  entregada: "Entregada",
-  cancelada: "Cancelada",
-};
-const STATUS_TONE: Record<OrderStatus, "success" | "warning" | "danger" | "info" | "neutral"> = {
-  pendiente: "warning",
-  confirmada: "info",
-  en_transito: "info",
-  entregada: "success",
-  cancelada: "danger",
-};
 const STEPS: { status: OrderStatus; label: string }[] = [
   { status: "pendiente", label: "Creada" },
   { status: "confirmada", label: "Confirmada" },
@@ -148,7 +132,7 @@ export function Orders() {
                       </p>
                     </div>
                     <div style={{ textAlign: "right" }}>
-                      <Badge tone={STATUS_TONE[o.status]}>{STATUS_LABEL[o.status]}</Badge>
+                      <Badge tone={ORDER_STATUS[o.status].tone}>{ORDER_STATUS[o.status].label}</Badge>
                       {o.total_amount != null && <strong style={{ display: "block", fontSize: 16, marginTop: 6 }}>{formatCOP(o.total_amount)}</strong>}
                     </div>
                   </div>

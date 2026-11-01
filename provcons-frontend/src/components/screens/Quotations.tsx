@@ -9,9 +9,10 @@ import { Icon } from "@/components/ui/Icon";
 import { Score } from "@/components/ui/Score";
 import { createOrders, getComparison, getMe, listQuotations, rerunComparison, uploadQuotationFile } from "@/lib/api";
 import { precheckUpload, rememberUpload } from "@/lib/uploadCheck";
+import { formatCOP, formatDate } from "@/lib/format";
 import type { User, QuotationResult, QuotationSummary, PaymentTerms } from "@/lib/api";
 
-type Stage = "list" | "upload" | "processing" | "review" | "results";
+type Stage = "list" | "upload" | "processing" | "results";
 
 const QUOTATION_STATUS: Record<QuotationSummary["status"], { label: string; tone: "success" | "warning" | "danger" | "info" | "neutral" }> = {
   abierta: { label: "Abierta", tone: "info" },
@@ -29,8 +30,6 @@ interface Purchase {
   itemsCount: number;
 }
 
-const copFormatter = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
-const formatCOP = (value: number) => copFormatter.format(value);
 const initials = (name: string) => name.split(/\s+/).filter((w) => w.length > 2).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || name.slice(0, 2).toUpperCase();
 
 export function Quotations() {
@@ -49,6 +48,15 @@ export function Quotations() {
   const [purchaseError, setPurchaseError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const loadQuotations = () => {
+    listQuotations()
+      .then(setQuotations)
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "No se pudieron cargar las cotizaciones");
+        setQuotations([]);
+      });
+  };
+
   useEffect(() => {
     getMe()
       .then((userData) => {
@@ -62,18 +70,10 @@ export function Quotations() {
       .catch(() => {
         router.push("/login");
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- carga inicial, una sola vez
   }, [router]);
 
   const isConstructora = user?.organization?.type === "constructora";
-
-  const loadQuotations = () => {
-    listQuotations()
-      .then(setQuotations)
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : "No se pudieron cargar las cotizaciones");
-        setQuotations([]);
-      });
-  };
 
   const backToList = () => {
     setStage("list");
@@ -196,51 +196,6 @@ export function Quotations() {
           </section>
         )}
         <div className="tip"><Icon name="spark" /><div><strong>La IA se encarga del trabajo manual</strong><p>No necesitas copiar cada producto. Revisa el resultado y ajusta únicamente lo necesario.</p></div></div>
-      </div>
-    );
-  }
-
-  if (isConstructora && stage === "review") {
-    const rows = [
-      { name: 'Varilla corrugada ½"', qty: "800", unit: "Unidades", conf: 98, tone: "success" as const },
-      { name: "Malla electrosoldada", qty: "120", unit: "Unidades", conf: 96, tone: "success" as const },
-      { name: "Alambre negro", qty: "60", unit: "Kilogramos", conf: 84, tone: "warning" as const },
-    ];
-    return (
-      <div className="page narrow-page">
-        <section className="page-heading">
-          <div><p className="eyebrow">NUEVA SOLICITUD / REVISIÓN</p><h1>Confirma los materiales</h1><p>Encontramos 3 productos en tu archivo. Revisa que las cantidades sean correctas.</p></div>
-          <Badge tone="success"><Icon name="check" size={12} /> Lectura completada</Badge>
-        </section>
-        <div className="step-labels"><span><b><Icon name="check" size={13} /></b> Archivo listo</span><i /><span className="current"><b>2</b> Revisar materiales</span><i /><span><b>3</b> Comparar</span></div>
-        <section className="card request-review">
-          <div className="request-meta">
-            <label>Nombre de la solicitud<input defaultValue="Acero para Torre Alameda" /></label>
-            <label>Lugar de entrega<input defaultValue="Chapinero, Bogotá" /></label>
-            <label>Fecha requerida<input type="date" defaultValue="2025-05-19" /></label>
-          </div>
-          <div className="table-scroll">
-            <table>
-              <thead><tr><th>Material detectado</th><th>Cantidad</th><th>Unidad</th><th>Confianza IA</th><th /></tr></thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.name}>
-                    <td><input defaultValue={r.name} /></td>
-                    <td><input className="small-input" defaultValue={r.qty} /></td>
-                    <td><button className="unit-select">{r.unit} <Icon name="chevron" size={13} /></button></td>
-                    <td><Badge tone={r.tone}><Icon name={r.tone === "success" ? "check" : "warning"} size={12} /> {r.conf}%</Badge></td>
-                    <td><button className="remove-row" aria-label="Eliminar material"><Icon name="close" size={15} /></button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <button className="add-material"><Icon name="plus" size={16} /> Agregar otro material</button>
-          <div className="card-actions">
-            <Button variant="ghost" onClick={() => setStage("upload")}>Cambiar archivo</Button>
-            <Button icon="spark" onClick={() => setStage("results")}>Buscar mejores proveedores</Button>
-          </div>
-        </section>
       </div>
     );
   }
@@ -495,7 +450,7 @@ export function Quotations() {
                 {quotations.map((q) => (
                   <tr key={q.id}>
                     <td><strong>{q.title}</strong></td>
-                    <td>{new Date(q.created_at).toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" })}</td>
+                    <td>{formatDate(q.created_at)}</td>
                     <td>{q.items_count}</td>
                     <td>
                       <Badge tone={QUOTATION_STATUS[q.status].tone}>{QUOTATION_STATUS[q.status].label}</Badge>

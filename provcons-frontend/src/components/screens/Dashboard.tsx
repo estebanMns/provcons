@@ -11,19 +11,9 @@ import { Icon } from "@/components/ui/Icon";
 import { Opportunity } from "@/components/ui/Opportunity";
 import { StatCard } from "@/components/ui/StatCard";
 import { getDashboardSummary, getMe } from "@/lib/api";
-import type { DashboardSummary, OrderStatus, RecentOrder, User } from "@/lib/api";
-
-const copFormatter = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
-const formatCOP = (value: number) => copFormatter.format(value);
-const formatDate = (iso: string) => new Date(iso).toLocaleDateString("es-CO", { day: "numeric", month: "short" });
-
-const STATUS: Record<OrderStatus, { label: string; tone: "success" | "warning" | "danger" | "info" | "neutral" }> = {
-  pendiente: { label: "Por confirmar", tone: "warning" },
-  confirmada: { label: "Confirmada", tone: "info" },
-  en_transito: { label: "En tránsito", tone: "info" },
-  entregada: { label: "Entregada", tone: "success" },
-  cancelada: { label: "Cancelada", tone: "danger" },
-};
+import type { DashboardSummary, RecentOrder, User } from "@/lib/api";
+import { formatCOP, formatDate } from "@/lib/format";
+import { orderStatusFor } from "@/lib/orderStatus";
 
 export function Dashboard() {
   const router = useRouter();
@@ -115,7 +105,7 @@ export function Dashboard() {
                 <Opportunity
                   key={o.quotation_id}
                   name={o.title}
-                  company={`${o.constructora} · ${formatDate(o.created_at)}`}
+                  company={`${o.constructora} · ${formatDate(o.created_at, false)}`}
                   value={formatCOP(o.estimated_value)}
                   score={Math.round(o.score * 100)}
                   tags={[`${o.items_matched} de ${o.items_total} materiales`, ...(o.cheapest_items ? [`Más barato en ${o.cheapest_items}`] : [])]}
@@ -145,6 +135,7 @@ export function Dashboard() {
 }
 
 function RecentOrders({ orders, counterpartLabel, onOpen }: { orders: RecentOrder[]; counterpartLabel: string; onOpen: () => void }) {
+  const isProvider = counterpartLabel === "Constructora"; // el proveedor ve a la constructora como contraparte
   return (
     <section className="card">
       <div className="card-head">
@@ -160,9 +151,9 @@ function RecentOrders({ orders, counterpartLabel, onOpen }: { orders: RecentOrde
             <tbody>
               {orders.map((o) => (
                 <tr key={o.id}>
-                  <td>#{o.id} <small style={{ color: "var(--muted)" }}>· {formatDate(o.created_at)}</small></td>
+                  <td>#{o.id} <small style={{ color: "var(--muted)" }}>· {formatDate(o.created_at, false)}</small></td>
                   <td>{o.counterpart}</td>
-                  <td><Badge tone={STATUS[o.status].tone}>{STATUS[o.status].label}</Badge></td>
+                  <td><Badge tone={orderStatusFor(o.status, isProvider).tone}>{orderStatusFor(o.status, isProvider).label}</Badge></td>
                   <td style={{ textAlign: "right" }}>{o.total_amount != null ? formatCOP(o.total_amount) : "—"}</td>
                 </tr>
               ))}
