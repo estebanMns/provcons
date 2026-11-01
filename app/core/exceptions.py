@@ -42,3 +42,9 @@ class ValidationError(DomainError):
     """Los datos de entrada son válidos en formato pero inválidos en regla
     de negocio (ej. precio negativo)."""
     status_code = 422
+
+
+class ServiceUnavailableError(DomainError):
+    """Una función depende de un servicio externo que no está configurado
+    (ej. la recuperación de contraseña sin proveedor de correo)."""
+    status_code = 503

@@ -29,6 +29,15 @@ class Settings(BaseSettings):
     secret_key: str
     access_token_expire_minutes: int = 60
 
+    # Recuperación de contraseña por correo (Resend, por API HTTPS: Render
+    # gratis bloquea SMTP). Sin dominio verificado, Resend solo entrega
+    # correos desde onboarding@resend.dev al dueño de la cuenta.
+    resend_emails: bool = True
+    resend_api_key: str = ""
+    email_from: str = "ProvCons <onboarding@resend.dev>"
+    frontend_url: str = "http://localhost:3000"  # para armar el enlace del correo
+    password_reset_minutes: int = 30
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 

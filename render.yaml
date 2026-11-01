@@ -30,3 +30,11 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+      # Recuperación de contraseña: el enlace del correo lleva a FRONTEND_URL.
+      # Sin dominio verificado en Resend, solo llega al correo dueño de la cuenta.
+      - key: FRONTEND_URL
+        value: https://provcons.vercel.app
+      - key: EMAIL_FROM
+        value: ProvCons <onboarding@resend.dev>
+      - key: RESEND_API_KEY
+        sync: false

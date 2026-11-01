@@ -7,11 +7,11 @@ import type { Role } from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
-import { signup, login, setToken, getMe } from "@/lib/api";
+import { signup, login, setToken, getMe, requestPasswordReset } from "@/lib/api";
 
-type Step = "login" | "register" | "ready";
+type Step = "login" | "register" | "forgot" | "ready";
 
-function Brand() {
+export function Brand() {
   return <div className="brand"><span className="brand-mark"><span /></span><span>ProvCons</span></div>;
 }
 
@@ -32,6 +32,9 @@ export function Auth() {
   const [signupFullName, setSignupFullName] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
+
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotMessage, setForgotMessage] = useState("");
 
   const enter = (role: Role) => {
     setRole(role);
@@ -80,6 +83,30 @@ export function Auth() {
       setLoading(false);
     }
   };
+
+  const handleForgot = async () => {
+    setError("");
+    if (!forgotEmail.includes("@")) {
+      setError("Escribe el correo con el que ingresas a ProvCons.");
+      return;
+    }
+    setLoading(true);
+    try {
+      setForgotMessage(await requestPasswordReset(forgotEmail.trim()));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "No se pudo enviar el enlace");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const goTo = (next: Step) => { setStep(next); setError(""); setForgotMessage(""); };
+
+  const heading = {
+    login: { eyebrow: "ACCESO SEGURO", title: "Bienvenido de nuevo", text: "Ingresa con tu correo corporativo." },
+    register: { eyebrow: "CREAR ORGANIZACIÓN", title: "Cuéntanos sobre tu empresa", text: "Usaremos estos datos para configurar tu experiencia." },
+    forgot: { eyebrow: "RECUPERAR ACCESO", title: "¿Olvidaste tu contraseña?", text: "Escribe tu correo y te enviaremos un enlace para crear una nueva. El enlace vence en 30 minutos." },
+  }[step === "ready" ? "login" : step];
 
   if (step === "ready") {
     return (
@@ -131,26 +158,38 @@ export function Auth() {
       </aside>
       <main className="auth-main">
         <div className="auth-card">
-          {step === "register" && (
-            <button className="auth-back" onClick={() => { setStep("login"); setError(""); }}>
+          {step !== "login" && (
+            <button className="auth-back" onClick={() => goTo("login")}>
               <Icon name="arrow" size={16} /> Volver
             </button>
           )}
-          <p className="eyebrow">{step === "login" ? "ACCESO SEGURO" : "CREAR ORGANIZACIÓN"}</p>
-          <h2>{step === "login" ? "Bienvenido de nuevo" : "Cuéntanos sobre tu empresa"}</h2>
-          <p>{step === "login" ? "Ingresa con tu correo corporativo." : "Usaremos estos datos para configurar tu experiencia."}</p>
+          <p className="eyebrow">{heading.eyebrow}</p>
+          <h2>{heading.title}</h2>
+          <p>{heading.text}</p>
           {error && <div style={{ color: "var(--danger)", marginBottom: "1rem", fontSize: 12 }}>{error}</div>}
-          {step === "login" ? (
+          {step === "forgot" ? (
+            forgotMessage ? (
+              <>
+                <div className="auth-notice" role="status"><Icon name="check" size={16} /> <span>{forgotMessage}</span></div>
+                <Button wide onClick={() => goTo("login")}>Volver a ingresar</Button>
+              </>
+            ) : (
+              <>
+                <label>Correo corporativo<input type="email" placeholder="nombre@empresa.com" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleForgot()} disabled={loading} autoFocus /></label>
+                <Button wide onClick={handleForgot} disabled={loading}>{loading ? "Enviando..." : "Enviarme el enlace"}</Button>
+              </>
+            )
+          ) : step === "login" ? (
             <>
               <label>Correo corporativo<input type="email" placeholder="nombre@empresa.com" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} disabled={loading} /></label>
               <label>Contraseña<div className="password-field"><input type={showPassword ? "text" : "password"} value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleLogin()} disabled={loading} /><button type="button" onClick={() => setShowPassword((v) => !v)}>{showPassword ? "Ocultar" : "Mostrar"}</button></div></label>
               <div className="login-options">
                 <span />
-                <button type="button" onClick={() => setError("La recuperación de contraseña aún no está disponible. Pide al administrador de tu organización que te ayude.")}>Olvidé mi contraseña</button>
+                <button type="button" onClick={() => { setForgotEmail(loginEmail); goTo("forgot"); }}>Olvidé mi contraseña</button>
               </div>
               <Button wide onClick={handleLogin} disabled={loading}>{loading ? "Ingresando..." : "Ingresar a ProvCons"}</Button>
               <div className="auth-divider"><span /> o <span /></div>
-              <button className="create-account" onClick={() => { setStep("register"); setError(""); }} disabled={loading}>Crear una organización nueva <Icon name="arrow" size={15} /></button>
+              <button className="create-account" onClick={() => goTo("register")} disabled={loading}>Crear una organización nueva <Icon name="arrow" size={15} /></button>
             </>
           ) : (
             <>

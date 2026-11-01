@@ -403,6 +403,9 @@ td .small-input { min-width: 60px; max-width: 70px; }
 .auth-card > p:not(.eyebrow), .welcome-card > p:not(.eyebrow) { color: var(--ink-soft); font-size: 11px; line-height: 1.6; margin: 0 0 24px; }
 .auth-back { border: 0; background: transparent; color: var(--ink-soft); padding: 0; display: flex; align-items: center; gap: 6px; font-size: 9px; cursor: pointer; }
 .auth-back svg { transform: rotate(180deg); }
+a.auth-back { text-decoration: none; width: fit-content; }
+.auth-notice { display: flex; align-items: flex-start; gap: 8px; padding: 12px 14px; margin-bottom: 18px; border-radius: 9px; background: var(--success-soft); color: var(--success); font-size: 11px; line-height: 1.6; }
+.auth-notice svg { flex: none; margin-top: 2px; }
 .auth-card > label { display: grid; gap: 7px; margin-bottom: 15px; color: var(--ink); font-size: 10px; font-weight: 700; }
 .auth-card > label > input, .password-field { width: 100%; min-height: 45px; border: 1px solid var(--line); border-radius: 9px; background: white; }
 .auth-card > label > input { padding: 0 13px; font-size: 11px; outline: 0; }

@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { getToken } from "@/lib/api";
 
 // "/" es la página de presentación pública; "/login" el acceso
-const PUBLIC_ROUTES = ["/", "/login"];
+const PUBLIC_ROUTES = ["/", "/login", "/restablecer"];
 
 export function ClientAuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();

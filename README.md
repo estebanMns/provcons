@@ -25,7 +25,8 @@ Plataforma B2B para el sector construcción que conecta constructoras con provee
 2. **Comparación de materiales.** Compara nombres sin importar mayúsculas, tildes ni plurales, y respeta las medidas: una varilla de 1/2" no es una de 3/8". Este cálculo lo hace un microservicio gRPC. Después, una revisión con IA encuentra sinónimos ("acero de refuerzo" = "varilla corrugada") y descarta lo que solo se parece en el nombre.
 3. **Comparación de proveedores.** Califica cada oferta por compatibilidad, disponibilidad y precio frente a los demás proveedores. Arma un ranking, una recomendación y la "mejor combinación" (comprar cada material al más conveniente).
 4. **Predicción a futuro.** Para cada opción de compra estima la probabilidad de que el proveedor cumpla, los días de entrega y el costo esperado contando el riesgo. Gemini lo explica en lenguaje claro. Ver [Predicción con IA](#predicción-con-ia).
-5. **Órdenes.** Se crea una orden por proveedor, que guarda los precios del momento de la compra. El proveedor confirma, despacha y entrega. Todo queda en el historial de actividad.
+5. **Cuentas.** Cada organización tiene sus usuarios. Si alguien olvida su contraseña, recibe un correo (Resend) con un enlace que vence en 30 minutos y sirve una sola vez.
+6. **Órdenes.** Se crea una orden por proveedor, que guarda los precios del momento de la compra. El proveedor confirma, despacha y entrega. Todo queda en el historial de actividad.
 
 ## Arquitectura
 
@@ -117,8 +118,8 @@ Cada "opción" es un plan para comprar el pedido completo. Elegir un proveedor s
 | Patrón | Dónde está | Para qué |
 |---|---|---|
 | Repository | `app/modules/*/repository.py` | Aísla el acceso a datos de las reglas de negocio. |
-| Strategy | `ScoringStrategy` → `ComparativeScoringStrategy`; `ForecastModel` → `StatisticalForecastModel` | Algoritmos de puntaje y de predicción intercambiables. |
-| Adapter | [`ai_client.py`](app/infrastructure/ai_client.py), [`matching_engine_client.py`](app/infrastructure/matching_engine_client.py), `AIForecastNarrator` | Ocultan las APIs de Gemini y de gRPC detrás de interfaces propias. |
+| Strategy | `ScoringStrategy` → `ComparativeScoringStrategy`; `ForecastModel` → `StatisticalForecastModel`; `EmailSender` → Resend o consola | Algoritmos de puntaje y de predicción, y formas de enviar correo, intercambiables. |
+| Adapter | [`ai_client.py`](app/infrastructure/ai_client.py), [`matching_engine_client.py`](app/infrastructure/matching_engine_client.py), `AIForecastNarrator`, `ResendEmailSender` ([`email.py`](app/infrastructure/email.py)) | Ocultan las APIs de Gemini y de gRPC detrás de interfaces propias. |
 | Factory | `get_matching_service`, `get_forecast_service`, `get_order_service` (routers) | Arman cada servicio con sus dependencias concretas. |
 | Facade | [`DashboardService`](app/modules/dashboard/service.py) | Una sola entrada para muchos cálculos del resumen. |
 | Circuit breaker simple / respaldo | `ResilientMatcher`, `AIForecastNarrator` → `TemplateNarrator` | Si el motor gRPC no responde, la comparación se calcula localmente; si Gemini falla, la predicción se explica con plantillas. La app sigue funcionando. |
@@ -212,6 +213,14 @@ npm run dev                          # http://localhost:3000
 ```
 
 Con `ENVIRONMENT=development`, la documentación interactiva de la API está en http://localhost:8000/docs.
+
+**Recuperación de contraseña:** con `RESEND_API_KEY` se envía un correo real. Sin ella, en desarrollo, el enlace aparece en la terminal del backend. Un administrador también puede restablecerla directamente:
+
+```powershell
+.\.venv\Scripts\python.exe scriptseset_password.py correo@empresa.com
+```
+
+Detalles y limitaciones de Resend sin dominio propio en [DEPLOY.md](DEPLOY.md#correo-de-recuperación-de-contraseña-resend).
 
 ## Pruebas
 

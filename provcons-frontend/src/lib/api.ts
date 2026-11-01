@@ -89,6 +89,23 @@ export function clearToken(): void {
   }
 }
 
+// Recuperación de contraseña: la respuesta es la misma exista o no el correo
+export async function requestPasswordReset(email: string): Promise<string> {
+  const data = await fetchAPI<{ message: string }>("/users/password/forgot", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+  return data.message;
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<string> {
+  const data = await fetchAPI<{ message: string }>("/users/password/reset", {
+    method: "POST",
+    body: JSON.stringify({ token, new_password: newPassword }),
+  });
+  return data.message;
+}
+
 export async function signup(payload: SignupPayload): Promise<User> {
   const data = await fetchAPI<User>("/users/signup", {
     method: "POST",

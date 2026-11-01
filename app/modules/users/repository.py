@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.users.models import User, Organization
@@ -10,6 +10,14 @@ class UserRepository:
 
     async def get_by_email(self, email: str) -> User | None:
         result = await self.db.execute(select(User).where(User.email == email))
+        return result.scalar_one_or_none()
+
+    async def get_by_email_insensitive(self, email: str) -> User | None:
+        """Para recuperar la contraseña: "Juan@Empresa.com" encuentra a
+        "juan@empresa.com". Si hubiera varias coincidencias se toma la más antigua."""
+        result = await self.db.execute(
+            select(User).where(func.lower(User.email) == email.strip().lower()).order_by(User.id).limit(1)
+        )
         return result.scalar_one_or_none()
 
     async def get_by_id(self, user_id: int, load_organization: bool = False) -> User | None:

@@ -45,6 +45,7 @@ Las cuentas de AWS creadas después del 15 de julio de 2025 están en el **plan 
    | `DATABASE_URL` | La misma del `.env` local. Debe empezar con `postgresql+asyncpg://` |
    | `SECRET_KEY` | Una clave **nueva**, distinta de la local: `python -c "import secrets; print(secrets.token_hex(32))"` |
    | `GEMINI_API_KEY` | La misma del `.env` local |
+   | `RESEND_API_KEY` | La misma del `.env` local (recuperación de contraseña, ver más abajo) |
 
 3. Crea el servicio y espera a que el deploy quede en verde.
 4. Copia la URL del servicio, por ejemplo `https://provcons-api.onrender.com`. Para comprobar que responde, abre `https://provcons-api.onrender.com/health`: debe mostrar `{"status":"ok","matching_engine":"SERVING"}`. Si en lugar de `SERVING` dice `unreachable`, el motor gRPC no arrancó; la API funciona igual, comparando localmente, y el log de Render muestra el motivo.
@@ -74,7 +75,24 @@ Mientras no hagas esto, el backend arranca pero falla en cualquier consulta (tim
 
 ## 4. Conectar los dos
 
-`render.yaml` trae `CORS_ORIGINS='["https://provcons.vercel.app"]'`. Si Vercel te asignó otra URL, cámbiala en **Render → Environment → `CORS_ORIGINS`**, en el mismo formato de lista JSON, y guarda. Render se reinicia solo.
+`render.yaml` trae `CORS_ORIGINS='["https://provcons.vercel.app"]'` y `FRONTEND_URL=https://provcons.vercel.app`. Si Vercel te asignó otra URL, cambia las dos en **Render → Environment**: `CORS_ORIGINS` en el mismo formato de lista JSON y `FRONTEND_URL` como texto simple. `FRONTEND_URL` es a donde lleva el enlace del correo de recuperación. Guarda y Render se reinicia solo.
+
+## Correo de recuperación de contraseña (Resend)
+
+"Olvidé mi contraseña" envía un correo con un enlace que vence en 30 minutos y sirve una sola vez. Se usa **Resend** (gratis: 3.000 correos al mes) porque funciona por API HTTPS; el plan gratuito de Render bloquea el envío por SMTP (Gmail, Outlook).
+
+1. Crea una cuenta en [resend.com](https://resend.com) y una **API key**. Ponla en `RESEND_API_KEY`, en el `.env` local y en Render.
+2. **Sin dominio propio**, Resend solo envía desde `onboarding@resend.dev` y **solo al correo con el que creaste la cuenta**. Sirve para probar y para recuperar tu propia cuenta.
+3. **Para enviar a cualquier usuario,** verifica un dominio en **Resend → Domains** (agregando los registros DNS que indica) y cambia `EMAIL_FROM` a algo como `ProvCons <no-responder@tu-dominio.com>`.
+4. Si un correo no llega, el log de Render muestra el motivo que devolvió Resend. El usuario siempre ve el mismo mensaje, para no revelar qué correos están registrados.
+
+**Restablecer una contraseña sin correo** (administrador, desde tu computador con el `.env` apuntando a la base):
+
+```powershell
+.\.venv\Scripts\python.exe scripts\reset_password.py correo@empresa.com
+```
+
+Pide la nueva contraseña dos veces sin mostrarla y queda registrada en el historial de actividad.
 
 ## Migraciones de base de datos
 
