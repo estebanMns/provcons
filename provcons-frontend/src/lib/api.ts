@@ -1,5 +1,5 @@
 // Sin NEXT_PUBLIC_API_URL, la API usa el mismo host que la página (localhost o la IP de la red local).
-const API_BASE =
+export const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ||
   (typeof window !== "undefined"
     ? `http://${window.location.hostname}:8000/api`
@@ -335,7 +335,28 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   return fetchAPI<DashboardSummary>("/dashboard/summary");
 }
 
-export type AuditCategory ="ordenes" | "cotizaciones" | "inventario" | "cuenta";
+export interface LatencyStats {
+  count: number;
+  p50: number | null;
+  p95: number | null;
+  p99: number | null;
+}
+
+export interface MetricsSummary {
+  uptime_seconds: number;
+  http: (LatencyStats & { method: string; route: string; errors: number })[];
+  ai: (LatencyStats & { kind: string; errors: number })[];
+  grpc: (LatencyStats & { method: string; errors: number })[];
+  engine_fallbacks: number;
+  event_loop_lag_ms: LatencyStats & { current: number | null };
+  web_vitals: Record<string, { count: number; p75: number | null }>;
+}
+
+export async function getMetricsSummary(): Promise<MetricsSummary> {
+  return fetchAPI<MetricsSummary>("/metrics/summary");
+}
+
+export type AuditCategory = "ordenes" | "cotizaciones" | "inventario" | "cuenta";
 
 export interface AuditEntry {
   id: number;

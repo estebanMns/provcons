@@ -6,6 +6,7 @@ export const viewPaths: Record<View, string> = {
   cotizaciones: "/cotizaciones",
   ordenes: "/ordenes",
   auditoria: "/auditoria",
+  rendimiento: "/rendimiento",
 };
 
 export const navItems: { id: View; label: string; icon: IconName }[] = [
@@ -14,4 +15,5 @@ export const navItems: { id: View; label: string; icon: IconName }[] = [
   { id: "cotizaciones", label: "Cotizaciones", icon: "file" },
   { id: "ordenes", label: "Órdenes", icon: "truck" },
   { id: "auditoria", label: "Historial", icon: "history" },
+  { id: "rendimiento", label: "Rendimiento", icon: "route" },
 ];

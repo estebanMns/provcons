@@ -30,8 +30,8 @@ export function Sidebar({ mobileOpen, closeMobile }: SidebarProps) {
   // Filtrar items según el rol
   const isProvider = user?.organization?.type === "proveedor";
   const filteredItems = isProvider
-    ? navItems.filter((item) => ["dashboard", "inventario", "ordenes", "auditoria"].includes(item.id))
-    : navItems.filter((item) => ["dashboard", "cotizaciones", "ordenes", "auditoria"].includes(item.id));
+    ? navItems.filter((item) => ["dashboard", "inventario", "ordenes", "auditoria", "rendimiento"].includes(item.id))
+    : navItems.filter((item) => ["dashboard", "cotizaciones", "ordenes", "auditoria", "rendimiento"].includes(item.id));
 
   const handleLogoutClick = () => {
     setShowLogoutModal(true);

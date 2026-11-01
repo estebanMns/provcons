@@ -1,5 +1,5 @@
 export type Role = "proveedor" | "constructora";
-export type View = "dashboard" | "inventario" | "cotizaciones" | "ordenes" | "auditoria";
+export type View = "dashboard" | "inventario" | "cotizaciones" | "ordenes" | "auditoria" | "rendimiento";
 
 export type IconName =
   | "grid" | "box" | "file" | "truck" | "history" | "bell" | "search" | "upload"
