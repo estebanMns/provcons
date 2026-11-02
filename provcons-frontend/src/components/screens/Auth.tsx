@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useRole } from "@/context/RoleContext";
 import type { Role } from "@/lib/types";
@@ -37,8 +38,9 @@ const PLANS: { role: Role; tag: string; title: string; chip: string; icon: IconN
   },
 ];
 
+// El logo lleva siempre a la página principal
 export function Brand() {
-  return <div className="brand"><span className="brand-mark"><span /></span><span>ProvCons</span></div>;
+  return <Link href="/" className="brand" aria-label="ProvCons, ir al inicio"><span className="brand-mark"><span /></span><span>ProvCons</span></Link>;
 }
 
 export function Auth() {
@@ -193,10 +195,12 @@ export function Auth() {
       <AuthStory />
       <main className="auth-main">
         <div className="auth-card">
-          {step === "forgot" && (
+          {step === "forgot" ? (
             <button className="auth-back" onClick={() => goTo("login")}>
               <Icon name="arrow" size={16} /> Volver
             </button>
+          ) : (
+            <Link className="auth-back" href="/"><Icon name="arrow" size={16} /> Volver al inicio</Link>
           )}
           <p className="eyebrow">{heading.eyebrow}</p>
           <h2>{heading.title}</h2>
