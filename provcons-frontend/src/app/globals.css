@@ -640,6 +640,7 @@ body:has(.landing)::after {
 
 .landing-hero { position: relative; min-height: 640px; border-radius: var(--notch); overflow: hidden; display: flex; align-items: center; margin-bottom: 28px; background: #1b1d1f; }
 .landing-hero-image { object-fit: cover; object-position: center 38%; }
+.landing-hero-piece { display: none; }
 .landing-hero::before { content: ""; position: absolute; inset: 0; z-index: 1; background: linear-gradient(90deg, rgba(8,12,12,.82) 0%, rgba(8,12,12,.55) 45%, rgba(8,12,12,.1) 80%); }
 .landing-hero-content { position: relative; z-index: 2; max-width: 720px; padding: 56px 64px 140px; color: #fff; }
 .landing-hero-content .eyebrow { color: #ffd08a; }
@@ -730,6 +731,19 @@ body:has(.landing)::after {
   .landing-notch { width: var(--nw); height: var(--nh); background: transparent; }
   .landing-notch::before, .landing-notch::after { display: none; }
   .landing-notch-card { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; }
+
+  /* La tarjeta muestra el pedazo de foto que falta, como un recorte levantado:
+     una segunda capa de la misma foto (alineada píxel por píxel) recortada a la
+     forma de la tarjeta, con velo oscuro y sombra */
+  .landing-hero-piece { display: block; z-index: 1; object-fit: cover; object-position: center 38%;
+    clip-path: inset(calc(100% - var(--nh) + 14px) 0 0 calc(100% - var(--nw) + 14px) round 28px 28px var(--notch) 28px); }
+  .landing-notch-card { position: relative; background: linear-gradient(135deg, rgba(8,12,12,.72), rgba(8,12,12,.42));
+    box-shadow: 0 18px 40px -14px rgba(8,12,12,.55), 0 0 0 1px rgba(255,255,255,.12) inset; }
+  .landing-notch-card .landing-more, .landing-notch-card .landing-projects strong { color: #fff; }
+  .landing-notch-card .landing-projects span { color: rgba(255,255,255,.82); }
+  .landing-notch-card .landing-more img { filter: invert(1); }
+  .landing-notch-card .landing-more:hover { color: #ffd08a; }
+  .landing-notch-card .landing-avatars img { border-color: #fff; }
 }
 
 @media (max-width: 1100px) {

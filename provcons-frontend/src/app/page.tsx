@@ -69,6 +69,8 @@ export default async function Home() {
       {/* Diseño de Figma: foto grande con un recorte abajo a la derecha */}
       <section className="landing-hero">
         <Image src="/landing/hero.jpg" alt="" fill priority sizes="(max-width: 820px) 100vw, 1400px" className="landing-hero-image" />
+        {/* El pedazo de la foto que falta, mostrado dentro de la tarjeta del recorte */}
+        <Image src="/landing/hero.jpg" alt="" aria-hidden fill sizes="(max-width: 820px) 100vw, 1400px" className="landing-hero-piece" />
         <div className="landing-hero-content">
           <p className="eyebrow">PLATAFORMA B2B PARA EL SECTOR CONSTRUCCIÓN</p>
           <h1>Compra materiales de calidad para una construcción de calidad.</h1>
