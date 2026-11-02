@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useRole } from "@/context/RoleContext";
 import type { Role } from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
@@ -18,7 +18,8 @@ export function Brand() {
 export function Auth() {
   const router = useRouter();
   const { setRole } = useRole();
-  const [step, setStep] = useState<Step>("login");
+  // /login?registro=1 abre directamente el registro (enlaces de la página principal)
+  const [step, setStep] = useState<Step>(useSearchParams().get("registro") ? "register" : "login");
   const [authRole, setAuthRole] = useState<Role>("proveedor");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");

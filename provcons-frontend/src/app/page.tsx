@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
 import { SessionCta } from "@/components/landing/SessionCta";
@@ -52,33 +53,58 @@ export default async function Home() {
   ];
 
   return (
-    <div className="landing">
+    <div className="landing" id="inicio">
       <header className="landing-nav">
-        <div className="brand"><span className="brand-mark"><span /></span><span>ProvCons</span></div>
-        <SessionCta />
+        <Link href="/" className="brand" aria-label="ProvCons, inicio"><span className="brand-mark"><span /></span><span>ProvCons</span></Link>
+        <nav className="landing-links" aria-label="Secciones">
+          <a href="#inicio">Inicio</a>
+          <a href="#como-funciona">Cómo funciona</a>
+          <Link href="/login?registro=1">Registrarse</Link>
+        </nav>
+        <SessionCta className="btn landing-cta" />
       </header>
 
+      {/* Diseño de Figma: foto grande con un recorte abajo a la derecha */}
       <section className="landing-hero">
-        <p className="eyebrow">PLATAFORMA B2B PARA EL SECTOR CONSTRUCCIÓN</p>
-        <h1>Compra materiales al mejor proveedor, con IA que puedes entender.</h1>
-        <p>Sube tu lista de materiales y ProvCons compara a los proveedores por precio, disponibilidad y cobertura. Te dice a quién comprarle y por qué.</p>
-        <div className="landing-actions">
-          <Link className="btn btn-primary" href="/login"><span>Crear una organización</span></Link>
-          <Link className="btn btn-secondary" href="/login"><span>Ingresar</span></Link>
+        <Image src="/landing/hero.jpg" alt="" fill priority sizes="(max-width: 820px) 100vw, 1400px" className="landing-hero-image" />
+        <div className="landing-hero-content">
+          <p className="eyebrow">PLATAFORMA B2B PARA EL SECTOR CONSTRUCCIÓN</p>
+          <h1>Compra materiales al mejor proveedor, con IA que puedes entender.</h1>
+          <p>Sube tu lista de materiales y ProvCons compara a los proveedores por precio, disponibilidad y cobertura. Te dice a quién comprarle y por qué.</p>
+          <div className="landing-actions">
+            <Link className="btn landing-cta" href="/login?registro=1"><span>Crear una organización</span></Link>
+            <Link className="btn landing-ghost" href="/login"><span>Ingresar</span></Link>
+          </div>
+        </div>
+
+        <div className="landing-notch">
+          <div className="landing-notch-card">
+            <a href="#como-funciona" className="landing-more">Más información <Image src="/landing/flecha.svg" alt="" width={31} height={24} /></a>
+            <div className="landing-projects">
+              <div className="landing-avatars">
+                {[1, 2, 3].map((n) => <Image key={n} src={`/landing/proyecto-${n}.png`} alt="" width={80} height={80} />)}
+              </div>
+              <div>
+                <strong>Proyectos increíbles</strong>
+                <span>Al mejor precio y con proveedores de calidad</span>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
       <section className="landing-stats" aria-label="Cifras de la plataforma">
         {figures.map((f) => (
-          <div key={f.label} className="stat-card">
-            <div><span>{f.label}</span><strong>{f.value ?? "—"}</strong></div>
+          <div key={f.label} className="landing-card landing-stat">
+            <span>{f.label}</span>
+            <strong>{f.value ?? "—"}</strong>
           </div>
         ))}
       </section>
 
-      <section className="landing-steps">
+      <section className="landing-steps" id="como-funciona">
         {STEPS.map((s, i) => (
-          <article key={s.title} className="card">
+          <article key={s.title} className="landing-card">
             <span className="landing-step-icon"><Icon name={s.icon} size={20} /></span>
             <small>Paso {i + 1}</small>
             <h2>{s.title}</h2>

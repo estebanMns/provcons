@@ -12,10 +12,10 @@ const subscribe = (onChange: () => void) => {
   return () => window.removeEventListener("storage", onChange);
 };
 
-export function SessionCta() {
+export function SessionCta({ className = "btn btn-secondary" }: { className?: string }) {
   const hasSession = useSyncExternalStore(subscribe, () => Boolean(getToken()), () => false);
 
   return hasSession
-    ? <Link className="btn btn-primary" href="/dashboard"><span>Ir a mi panel</span></Link>
-    : <Link className="btn btn-secondary" href="/login"><span>Ingresar</span></Link>;
+    ? <Link className={className} href="/dashboard"><span>Ir a mi panel</span></Link>
+    : <Link className={className} href="/login"><span>Iniciar sesión</span></Link>;
 }
