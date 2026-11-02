@@ -57,8 +57,8 @@ class FakeOrderRepo:
     async def get_organization_names(self, org_ids):
         return {i: f"Org {i}" for i in org_ids}
 
-    async def get_quotation_titles(self, ids):
-        return {i: "Obra" for i in ids}
+    async def get_quotation_info(self, ids):
+        return {i: {"title": "Obra", "delivery_address": "Cra 7 # 45-10, Bogotá", "description": "Torre B"} for i in ids}
 
     async def client_history(self, constructora_org_id, provider_org_id, exclude_order_id=None):
         return ClientHistory(delivered=8, cancelled_by_client=0, months_on_platform=6)
@@ -322,3 +322,43 @@ def test_cancelar_una_pendiente_no_toca_el_stock(setup):
     order_id = _create(service, [ids["varilla_valle"]])[0]["id"]
     asyncio.run(service.cancel_order(order_id, 2, VALLE))  # el proveedor la rechaza sin aceptar
     assert product.quantity_available == 1000
+
+
+def _create_n(service, match_ids, installments):
+    return asyncio.run(service.create_orders(1, match_ids, PaymentTerms.contado, actor_user_id=1,
+                                             actor_org_id=CONSTRUCTORA, installments=installments))
+
+
+def test_la_orden_guarda_las_cuotas_pedidas_y_la_direccion(setup):
+    service, *_, ids = setup
+    out = _create_n(service, [ids["varilla_valle"]], 6)[0]
+    assert out["requested_installments"] == 6 and out["payment_terms"] == PaymentTerms.cuotas
+    assert out["delivery_address"] == "Cra 7 # 45-10, Bogotá" and out["quotation_description"] == "Torre B"
+
+
+def test_sin_cuotas_en_la_compra_se_usan_las_de_la_cotizacion(setup):
+    service, _, _, quotation, ids = setup
+    quotation.payment_installments = 3
+    assert _create(service, [ids["varilla_valle"]])[0]["requested_installments"] == 3
+
+
+def test_mismas_cuotas_sin_interes_confirma_directo(setup):
+    service, *_, ids = setup
+    order_id = _create_n(service, [ids["varilla_valle"]], 6)[0]["id"]
+    out = asyncio.run(service.confirm_order(order_id, 2, VALLE, delivery_days=5, installments=6))
+    assert out["status"] == OrderStatus.confirmada and out["installments"] == 6
+
+
+@pytest.mark.parametrize("installments,rate", [(6, 1.5), (3, 0), (1, 0)])
+def test_otras_cuotas_o_con_interes_queda_como_propuesta(setup, installments, rate):
+    service, *_, ids = setup
+    order_id = _create_n(service, [ids["varilla_valle"]], 6)[0]["id"]
+    out = asyncio.run(service.confirm_order(order_id, 2, VALLE, delivery_days=5, installments=installments, monthly_rate_pct=rate))
+    assert out["status"] == OrderStatus.pendiente and out["proposal"]["installments"] == installments
+
+
+def test_orden_antigua_a_cuotas_sin_numero_pide_aprobacion():
+    order = Order(status=OrderStatus.pendiente, payment_terms=PaymentTerms.cuotas, predicted_negotiation={})
+    assert order.requires_client_approval(1) and order.requires_client_approval(6)
+    contado = Order(status=OrderStatus.pendiente, payment_terms=PaymentTerms.contado, predicted_negotiation={})
+    assert not contado.requires_client_approval(1)

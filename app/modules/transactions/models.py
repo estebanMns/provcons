@@ -44,6 +44,8 @@ class Order(Base, TimestampMixin):
 
     status: Mapped[OrderStatus] = mapped_column(Enum(OrderStatus), default=OrderStatus.pendiente)
     payment_terms: Mapped[PaymentTerms] = mapped_column(Enum(PaymentTerms), nullable=True)
+    # Cuotas que pidió la constructora al comprar (1 = contado)
+    requested_installments: Mapped[int | None] = mapped_column(Integer, nullable=True)
     total_amount: Mapped[float | None] = mapped_column(Float, nullable=True)
     logistics_cost: Mapped[float] = mapped_column(Float, nullable=True)
     predicted_negotiation: Mapped[dict] = mapped_column(JSONB, default=dict)
@@ -73,10 +75,17 @@ class Order(Base, TimestampMixin):
         if self.proposal:
             raise ValueError("Ya enviaste una propuesta: espera la respuesta de la constructora")
 
-    def requires_client_approval(self, installments: int) -> bool:
-        """Confirmar de una vez solo si el proveedor deja el pago como lo pidió
-        la constructora (de contado). Cualquier cuota es una condición nueva."""
-        return installments > 1 or self.payment_terms == PaymentTerms.cuotas
+    def requires_client_approval(self, installments: int, monthly_rate_pct: float = 0) -> bool:
+        """Se confirma de una vez solo si el proveedor acepta las mismas cuotas
+        que pidió la constructora y sin interés. Otras cuotas o interés son
+        condiciones nuevas: van como propuesta. Las órdenes antiguas "a cuotas"
+        sin número siempre piden aprobación."""
+        requested = self.requested_installments
+        if requested is None:
+            requested = None if self.payment_terms == PaymentTerms.cuotas else 1
+        if requested is None:
+            return True
+        return installments != requested or (installments > 1 and monthly_rate_pct > 0)
 
     def apply_terms(self, terms: dict, now: datetime) -> None:
         """Deja la orden confirmada con estas condiciones."""

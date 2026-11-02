@@ -7,11 +7,12 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Criterion } from "@/components/ui/Criterion";
 import { Icon } from "@/components/ui/Icon";
+import { InstallmentPicker, installmentsLabel } from "@/components/ui/InstallmentPicker";
 import { Score } from "@/components/ui/Score";
 import { createOrders, getComparison, getMe, listQuotations, rerunComparison, uploadQuotationFile } from "@/lib/api";
 import { precheckUpload, rememberUpload } from "@/lib/uploadCheck";
 import { formatCOP, formatDate } from "@/lib/format";
-import type { User, QuotationResult, QuotationSummary, PaymentTerms } from "@/lib/api";
+import type { User, QuotationResult, QuotationSummary } from "@/lib/api";
 
 type Stage = "list" | "upload" | "processing" | "results";
 
@@ -44,7 +45,9 @@ export function Quotations() {
   const [quotationResult, setQuotationResult] = useState<QuotationResult | null>(null);
   const [error, setError] = useState<string>("");
   const [purchase, setPurchase] = useState<Purchase | null>(null);
-  const [paymentTerms, setPaymentTerms] = useState<PaymentTerms>("contado");
+  const [installments, setInstallments] = useState(1);
+  // Datos de la cotización nueva: se envían junto con el archivo
+  const [details, setDetails] = useState({ title: "", delivery_address: "", description: "", payment_installments: 1 });
   const [purchasing, setPurchasing] = useState(false);
   const [purchaseError, setPurchaseError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -106,7 +109,13 @@ export function Quotations() {
     }
   };
 
+  const addressOk = details.delivery_address.trim().length >= 5;
   const handleSelectFile = () => {
+    if (!addressOk) {
+      setError("Escribe la dirección de entrega antes de subir el archivo.");
+      return;
+    }
+    setError("");
     fileInputRef.current?.click();
   };
 
@@ -121,7 +130,7 @@ export function Quotations() {
 
     setStage("processing");
     try {
-      const result = await uploadQuotationFile(file, file.name);
+      const result = await uploadQuotationFile(file, { ...details, title: details.title.trim() || file.name });
       rememberUpload("cotizacion", check.hash, file.name);
       setQuotationResult(result);
       setStage("results");
@@ -133,7 +142,7 @@ export function Quotations() {
 
   const startPurchase = (p: Purchase) => {
     setPurchaseError("");
-    setPaymentTerms("contado");
+    setInstallments(quotationResult?.payment_installments ?? 1);  // lo que pidió en la cotización
     setPurchase(p);
   };
 
@@ -142,7 +151,7 @@ export function Quotations() {
     setPurchasing(true);
     setPurchaseError("");
     try {
-      await createOrders(quotationResult.quotation_id, purchase.matchIds, paymentTerms);
+      await createOrders(quotationResult.quotation_id, purchase.matchIds, installments);
       router.push("/ordenes");
     } catch (err) {
       setPurchaseError(err instanceof Error ? err.message : "No se pudo crear la orden");
@@ -164,6 +173,25 @@ export function Quotations() {
           </section>
         )}
         {stage === "upload" ? (
+          <>
+          <section className="card quotation-details">
+            <h2>Datos de la cotización</h2>
+            <div className="quotation-details-grid">
+              <label><span>Nombre de la obra <small>(opcional)</small></span>
+                <input value={details.title} onChange={(e) => setDetails((d) => ({ ...d, title: e.target.value }))} maxLength={200} placeholder="Ej. Torre B · Conjunto Los Pinos" />
+              </label>
+              <label><span>Dirección de entrega <small>(obligatoria)</small></span>
+                <input value={details.delivery_address} onChange={(e) => setDetails((d) => ({ ...d, delivery_address: e.target.value }))} maxLength={300} placeholder="Ej. Cra 7 # 45-10, Bogotá" aria-required="true" />
+              </label>
+              <label className="wide"><span>Descripción <small>(opcional)</small></span>
+                <textarea value={details.description} onChange={(e) => setDetails((d) => ({ ...d, description: e.target.value }))} maxLength={1000} rows={3} placeholder="Ej. Entregar en horario de 7 a. m. a 4 p. m.; acceso por la portería 2." />
+              </label>
+              <div className="wide">
+                <span className="quotation-details-label">¿Cómo quieres pagar?</span>
+                <InstallmentPicker value={details.payment_installments} onChange={(n) => setDetails((d) => ({ ...d, payment_installments: n }))} />
+              </div>
+            </div>
+          </section>
           <section className="upload-card quotation-upload">
             <div className="upload-icon"><Icon name="file" size={28} /></div>
             <h2>Sube tu lista de materiales</h2>
@@ -175,10 +203,12 @@ export function Quotations() {
               onChange={handleFileSelect}
               style={{ display: "none" }}
             />
-            <Button onClick={handleSelectFile}>Seleccionar archivo</Button>
+            <Button onClick={handleSelectFile} disabled={!addressOk}>Seleccionar archivo</Button>
+            {!addressOk && <small className="quotation-hint">Primero escribe la dirección de entrega.</small>}
             <div className="file-types"><span><Icon name="pdf" /> PDF</span><span><Icon name="excel" /> Excel</span><span><Icon name="camera" /> Foto</span></div>
             <small><Icon name="shield" size={15} /> Archivo privado · Máximo 25 MB</small>
           </section>
+          </>
         ) : (
           <section className="processing-card">
             <div className="ai-loader"><span /><Icon name="spark" size={30} /></div>
@@ -218,6 +248,13 @@ export function Quotations() {
             <p className="eyebrow">RESULTADOS / {r.title}</p>
             <h1>Comparación de proveedores</h1>
             <p>Leímos {r.items_total} materiales: {itemsWithOffers} tienen ofertas de {r.providers.length} proveedor(es){r.items_without_offers > 0 ? ` y ${r.items_without_offers} no los ofrece nadie todavía` : ""}.</p>
+            {(r.delivery_address || r.payment_installments) && (
+              <p className="quotation-meta">
+                {r.delivery_address && <span><Icon name="truck" size={14} /> Entregar en {r.delivery_address}</span>}
+                {r.payment_installments && <span><Icon name="wallet" size={14} /> Pago {installmentsLabel(r.payment_installments)}</span>}
+              </p>
+            )}
+            {r.description && <p className="quotation-description">{r.description}</p>}
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <Button variant="ghost" onClick={backToList}>Mis cotizaciones</Button>
@@ -404,10 +441,9 @@ export function Quotations() {
                 <span>Total estimado <strong>{formatCOP(purchase.total)}</strong></span>
               </div>
               <div style={{ marginTop: 16, textAlign: "left" }}>
-                <small style={{ color: "var(--muted)" }}>Forma de pago</small>
-                <div className="modal-actions" style={{ marginTop: 6 }}>
-                  <Button variant={paymentTerms === "contado" ? "primary" : "secondary"} onClick={() => setPaymentTerms("contado")}>De contado</Button>
-                  <Button variant={paymentTerms === "cuotas" ? "primary" : "secondary"} onClick={() => setPaymentTerms("cuotas")}>A cuotas</Button>
+                <small style={{ color: "var(--muted)" }}>Forma de pago {quotationResult?.payment_installments ? "(la de tu cotización; puedes cambiarla)" : ""}</small>
+                <div style={{ marginTop: 6 }}>
+                  <InstallmentPicker value={installments} onChange={setInstallments} disabled={purchasing} />
                 </div>
               </div>
               {purchaseError && <p style={{ color: "var(--danger)", fontSize: 11, margin: "14px 0 0" }}>{purchaseError}</p>}
@@ -453,7 +489,7 @@ export function Quotations() {
               <tbody>
                 {quotations.map((q) => (
                   <tr key={q.id}>
-                    <td><strong>{q.title}</strong></td>
+                    <td><strong>{q.title}</strong>{q.delivery_address && <small className="quotation-address">{q.delivery_address}</small>}</td>
                     <td>{formatDate(q.created_at)}</td>
                     <td>{q.items_count}</td>
                     <td>

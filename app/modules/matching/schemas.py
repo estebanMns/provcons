@@ -13,6 +13,9 @@ class QuotationItemCreate(BaseModel):
 
 class QuotationCreate(BaseModel):
     title: str = Field(min_length=2, max_length=200)
+    delivery_address: str | None = Field(default=None, min_length=5, max_length=300)
+    description: str | None = Field(default=None, max_length=1000)
+    payment_installments: int = Field(default=1, ge=1, le=12)  # 1 = contado
     items: list[QuotationItemCreate] = Field(min_length=1)
 
 
@@ -22,6 +25,9 @@ class QuotationOut(BaseModel):
     constructora_org_id: int
     title: str
     status: QuotationStatus
+    delivery_address: str | None = None
+    description: str | None = None
+    payment_installments: int | None = None
     created_at: datetime
 
 
@@ -94,6 +100,9 @@ class QuotationSummaryOut(BaseModel):
     id: int
     title: str
     status: QuotationStatus
+    delivery_address: str | None = None
+    description: str | None = None
+    payment_installments: int | None = None
     created_at: datetime
     items_count: int
     active_orders: int
@@ -109,6 +118,9 @@ class AIReviewOut(BaseModel):
 class QuotationComparisonOut(BaseModel):
     quotation_id: int
     title: str
+    delivery_address: str | None = None
+    description: str | None = None
+    payment_installments: int | None = None
     matches_found: int
     ai_review: AIReviewOut
     items_total: int

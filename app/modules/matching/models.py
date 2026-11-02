@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import String, Float, Enum, ForeignKey
+from sqlalchemy import Integer, String, Float, Enum, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.session import Base
@@ -19,6 +19,10 @@ class Quotation(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(primary_key=True)
     constructora_org_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"))
     title: Mapped[str] = mapped_column(String(200))
+    # Lo que la constructora indica al crearla y el proveedor ve en la orden
+    delivery_address: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    payment_installments: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 1 = contado
     status: Mapped[QuotationStatus] = mapped_column(Enum(QuotationStatus), default=QuotationStatus.abierta)
 
     items: Mapped[list["QuotationItem"]] = relationship(back_populates="quotation")

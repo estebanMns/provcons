@@ -34,7 +34,7 @@ class OrderService:
 
     async def create_orders(
         self, quotation_id: int, match_ids: list[int], payment_terms: PaymentTerms,
-        actor_user_id: int, actor_org_id: int,
+        actor_user_id: int, actor_org_id: int, installments: int | None = None,
     ) -> list[dict]:
         quotation = await self.repository.get_quotation(quotation_id)
         if quotation is None:
@@ -60,6 +60,12 @@ class OrderService:
             names = ", ".join(sorted(items_seen[i] for i in already_ordered))
             raise ConflictError(f"Ya existe una orden activa para: {names}")
 
+        # Cuotas pedidas: las de la compra, o las de la cotización, o lo que diga payment_terms
+        if installments is None:
+            installments = quotation.payment_installments or (1 if payment_terms == PaymentTerms.contado else None)
+        if installments is not None:
+            payment_terms = PaymentTerms.contado if installments == 1 else PaymentTerms.cuotas
+
         by_provider: dict[int, list[OrderItem]] = defaultdict(list)
         for match, quotation_item, inventory in offers:
             unit_price = inventory.unit_price
@@ -80,6 +86,7 @@ class OrderService:
                 constructora_org_id=actor_org_id,
                 provider_org_id=provider_org_id,
                 payment_terms=payment_terms,
+                requested_installments=installments,
                 total_amount=round(sum(i.subtotal or 0 for i in items), 2),
                 items=items,
             )
@@ -133,6 +140,7 @@ class OrderService:
             "constructora_name": names.get(order.constructora_org_id),
             "amount": amount,
             "requested_payment_terms": order.payment_terms,
+            "requested_installments": order.requested_installments,
             **evaluate(amount, history),
         }
         narrative = await self.credit_narrator.narrate(evaluation)
@@ -163,7 +171,7 @@ class OrderService:
             "delivery_days": delivery_days,
             "note": (note or "").strip() or None,
         }
-        needs_approval = order.requires_client_approval(installments)
+        needs_approval = order.requires_client_approval(installments, monthly_rate_pct)
         stock: list[dict] = []
         try:
             order.require_open_for_provider()
@@ -282,13 +290,16 @@ class OrderService:
         names = await self.repository.get_organization_names(
             {o.constructora_org_id for o in orders} | {o.provider_org_id for o in orders}
         )
-        titles = await self.repository.get_quotation_titles({o.quotation_id for o in orders if o.quotation_id})
+        info = await self.repository.get_quotation_info({o.quotation_id for o in orders if o.quotation_id})
         now = datetime.now(timezone.utc)
         return [
             {
                 "id": o.id,
                 "quotation_id": o.quotation_id,
-                "quotation_title": titles.get(o.quotation_id),
+                "quotation_title": info.get(o.quotation_id, {}).get("title"),
+                "delivery_address": info.get(o.quotation_id, {}).get("delivery_address"),
+                "quotation_description": info.get(o.quotation_id, {}).get("description"),
+                "requested_installments": o.requested_installments,
                 "constructora_org_id": o.constructora_org_id,
                 "constructora_name": names.get(o.constructora_org_id),
                 "provider_org_id": o.provider_org_id,

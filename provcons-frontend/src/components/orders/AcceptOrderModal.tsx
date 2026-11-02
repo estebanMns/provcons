@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
+import { installmentsLabel } from "@/components/ui/InstallmentPicker";
 import { confirmOrder, getOrderEvaluation } from "@/lib/api";
 import type { Order, OrderEvaluation } from "@/lib/api";
 import { formatCOP, formatDate } from "@/lib/format";
@@ -16,7 +17,9 @@ const MAX_DAYS = 180;
 export function AcceptOrderModal({ order, onClose, onDone }: { order: Order; onClose: () => void; onDone: (updated: Order) => void }) {
   const [evaluation, setEvaluation] = useState<OrderEvaluation | null>(null);
   const [loadError, setLoadError] = useState("");
-  const [installments, setInstallments] = useState(1);
+  // Requested: lo que pidió la constructora. Las órdenes antiguas "a cuotas" no traen número
+  const requested = order.requested_installments ?? (order.payment_terms === "cuotas" ? null : 1);
+  const [installments, setInstallments] = useState(requested ?? 1);
   const [rate, setRate] = useState("0");
   const [days, setDays] = useState("5");
   const [note, setNote] = useState("");
@@ -37,8 +40,8 @@ export function AcceptOrderModal({ order, onClose, onDone }: { order: Order; onC
   const daysValid = Number.isFinite(daysValue) && daysValue >= 1 && daysValue <= MAX_DAYS;
   const plan = installmentPlan(amount, installments, rateValue);
   const verdict = evaluation?.options.find((o) => o.installments === installments)?.verdict;
-  // De contado como lo pidió la constructora se confirma de una vez; lo demás es una propuesta
-  const needsApproval = installments > 1 || order.payment_terms === "cuotas";
+  // Las mismas cuotas que pidió y sin interés se confirman de una vez; lo demás es una propuesta
+  const needsApproval = requested === null || installments !== requested || (installments > 1 && rateValue > 0);
 
   const submit = async () => {
     if (!daysValid) { setError(`Escribe los días de entrega (de 1 a ${MAX_DAYS}).`); return; }
@@ -61,7 +64,7 @@ export function AcceptOrderModal({ order, onClose, onDone }: { order: Order; onC
           <div>
             <p className="eyebrow">ORDEN #{order.id} · {formatCOP(amount)}</p>
             <h2 id="accept-title">Revisar y aceptar</h2>
-            <p>{order.constructora_name ?? "La constructora"} pidió pago {order.payment_terms === "cuotas" ? "a cuotas" : "de contado"}.</p>
+            <p>{order.constructora_name ?? "La constructora"} pidió pago {requested === null ? "a cuotas" : installmentsLabel(requested)}{order.delivery_address ? ` · entregar en ${order.delivery_address}` : ""}.</p>
           </div>
           <button className="accept-close" onClick={onClose} disabled={saving} aria-label="Cerrar"><Icon name="close" size={18} /></button>
         </div>

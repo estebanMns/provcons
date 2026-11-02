@@ -108,6 +108,8 @@ async def create_quotation(
     return await service.create_quotation(
         constructora_org_id=current_user.organization_id,
         title=payload.title, items_data=items_data, actor_user_id=current_user.id,
+        delivery_address=payload.delivery_address, description=payload.description,
+        payment_installments=payload.payment_installments,
     )
 
 
@@ -159,12 +161,24 @@ async def run_matching(
 @router.post("/quotations/upload", response_model=QuotationUploadOut)
 async def upload_quotation_file(
     title: str = Form(""),
+    delivery_address: str = Form(""),
+    description: str = Form(""),
+    payment_installments: int = Form(1),
     file: UploadFile = File(...),
     service: MatchingService = Depends(get_matching_service),
     current_user: User = Depends(get_current_user),
 ):
     """Endpoint que procesa un archivo de cotización (PDF, Excel o imagen) con IA,
     extrae los materiales, crea una cotización y ejecuta matching automático."""
+
+    # Se valida antes de gastar una llamada a la IA
+    delivery_address = delivery_address.strip()
+    if not 5 <= len(delivery_address) <= 300:
+        raise ValidationError("Escribe la dirección de entrega (entre 5 y 300 caracteres)")
+    if len(description) > 1000:
+        raise ValidationError("La descripción puede tener hasta 1000 caracteres")
+    if not 1 <= payment_installments <= 12:
+        raise ValidationError("La forma de pago debe ser de contado o de 2 a 12 cuotas")
 
     file_content = await file.read()
     logger.info("Procesando archivo de cotización: %s (%s bytes)", file.filename, len(file_content))
@@ -195,9 +209,11 @@ async def upload_quotation_file(
 
     quotation = await service.create_quotation(
         constructora_org_id=current_user.organization_id,
-        title=title or file.filename or "Cotización sin título",
+        title=title.strip() or file.filename or "Cotización sin título",
         items_data=items_data,
         actor_user_id=current_user.id,
+        delivery_address=delivery_address, description=description,
+        payment_installments=payment_installments,
     )
 
     # Ejecutar matching automático

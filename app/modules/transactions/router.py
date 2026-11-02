@@ -35,7 +35,7 @@ async def create_orders(
     orden por proveedor (ej. "comprar la mejor combinación" crea varias)."""
     return await service.create_orders(
         quotation_id=payload.quotation_id, match_ids=payload.match_ids,
-        payment_terms=payload.payment_terms,
+        payment_terms=payload.payment_terms, installments=payload.installments,
         actor_user_id=current_user.id, actor_org_id=current_user.organization_id,
     )
 

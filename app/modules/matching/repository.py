@@ -39,6 +39,8 @@ class QuotationRepository:
         return [
             {
                 "id": q.id, "title": q.title, "status": q.status, "created_at": q.created_at,
+                "delivery_address": q.delivery_address, "description": q.description,
+                "payment_installments": q.payment_installments,
                 "items_count": n_items, "active_orders": n_orders,
             }
             for q, n_items, n_orders in result.all()

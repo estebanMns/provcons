@@ -195,7 +195,14 @@ export interface BestCombination {
   savings_vs_recommendation: number | null;
 }
 
-export interface QuotationSummary {
+// Lo que la constructora indica al crear la cotización
+export interface QuotationDetails {
+  delivery_address: string | null;
+  description: string | null;
+  payment_installments: number | null;  // 1 = contado
+}
+
+export interface QuotationSummary extends QuotationDetails {
   id: number;
   title: string;
   status: "abierta" | "en_negociacion" | "cerrada" | "cancelada";
@@ -275,7 +282,7 @@ export async function getForecast(quotationId: number): Promise<QuotationForecas
   return fetchAPI<QuotationForecast>(`/matching/quotations/${quotationId}/forecast`);
 }
 
-export interface QuotationResult {
+export interface QuotationResult extends QuotationDetails {
   quotation_id: number;
   title: string;
   items_extracted?: number;  // solo al subir un archivo
@@ -291,11 +298,14 @@ export interface QuotationResult {
 
 export async function uploadQuotationFile(
   file: File,
-  title: string,
+  details: { title: string; delivery_address: string; description: string; payment_installments: number },
 ): Promise<QuotationResult> {
   const formData = new FormData();
   formData.append("file", file);
-  formData.append("title", title);
+  formData.append("title", details.title);
+  formData.append("delivery_address", details.delivery_address);
+  formData.append("description", details.description);
+  formData.append("payment_installments", String(details.payment_installments));
 
   const token = getToken();
   const headers = new Headers();
@@ -489,6 +499,9 @@ export interface Order {
   provider_name: string | null;
   status: OrderStatus;
   payment_terms: PaymentTerms | null;
+  requested_installments: number | null;  // cuotas que pidió la constructora (1 = contado)
+  delivery_address: string | null;
+  quotation_description: string | null;
   total_amount: number | null;
   items: OrderItem[];
   installments: number | null;
@@ -528,6 +541,7 @@ export interface OrderEvaluation {
   constructora_name: string | null;
   amount: number;
   requested_payment_terms: PaymentTerms | null;
+  requested_installments: number | null;
   score: number;
   confidence: "baja" | "media" | "alta";
   max_installments: number;
@@ -546,10 +560,11 @@ export interface OrderEvaluation {
 }
 
 // Crea una orden por cada proveedor de las ofertas elegidas
-export async function createOrders(quotationId: number, matchIds: number[], paymentTerms: PaymentTerms): Promise<Order[]> {
+// installments: 1 = contado, 2 a 12 = cuotas con que la constructora quiere pagar
+export async function createOrders(quotationId: number, matchIds: number[], installments: number): Promise<Order[]> {
   return fetchAPI<Order[]>("/orders", {
     method: "POST",
-    body: JSON.stringify({ quotation_id: quotationId, match_ids: matchIds, payment_terms: paymentTerms }),
+    body: JSON.stringify({ quotation_id: quotationId, match_ids: matchIds, installments }),
   });
 }
 

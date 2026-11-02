@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
+import { installmentsLabel } from "@/components/ui/InstallmentPicker";
 import { AcceptOrderModal } from "@/components/orders/AcceptOrderModal";
 import { acceptProposal, advanceOrder, cancelOrder, getMe, listOrders, rejectProposal } from "@/lib/api";
 import type { Order, OrderStatus, User } from "@/lib/api";
@@ -151,6 +152,7 @@ export function Orders() {
                     </div>
                   )}
 
+                  <OrderRequest order={o} />
                   <DeliveryInfo order={o} />
                   {o.status === "pendiente" && o.proposal && (
                     <ProposalBox
@@ -266,8 +268,20 @@ function paymentLabel(o: Order) {
     const rate = o.monthly_rate_pct ? ` (${o.monthly_rate_pct.toLocaleString("es-CO")} % mensual)` : " (sin interés)";
     return `${o.installments} cuotas de ${formatCOP(o.installment_amount)}${rate}`;
   }
+  if (o.requested_installments != null) return `pidió ${installmentsLabel(o.requested_installments)}`;
   if (!o.payment_terms) return "";
   return `pidió pago ${o.payment_terms === "contado" ? "de contado" : "a cuotas"}`;
+}
+
+// Dirección de entrega y descripción que escribió la constructora en la cotización
+function OrderRequest({ order }: { order: Order }) {
+  if (!order.delivery_address && !order.quotation_description) return null;
+  return (
+    <div className="order-request">
+      {order.delivery_address && <span><Icon name="truck" size={14} /> Entregar en <strong>{order.delivery_address}</strong></span>}
+      {order.quotation_description && <p>{order.quotation_description}</p>}
+    </div>
+  );
 }
 
 // Fecha prometida y si va (o llegó) a tiempo

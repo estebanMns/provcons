@@ -10,6 +10,8 @@ class OrderCreate(BaseModel):
     quotation_id: int
     match_ids: list[int] = Field(min_length=1)
     payment_terms: PaymentTerms = PaymentTerms.contado
+    # Cuotas con que quiere pagar (1 = contado). Sin valor, se usa el de la cotización
+    installments: int | None = Field(default=None, ge=1, le=12)
 
 
 class OrderTermsRequest(BaseModel):
@@ -53,6 +55,9 @@ class OrderOut(BaseModel):
     provider_name: str | None = None
     status: OrderStatus
     payment_terms: PaymentTerms | None
+    requested_installments: int | None = None
+    delivery_address: str | None = None
+    quotation_description: str | None = None
     total_amount: float | None
     items: list[OrderItemOut]
     installments: int | None = None
@@ -96,6 +101,7 @@ class OrderEvaluationOut(BaseModel):
     constructora_name: str | None
     amount: float
     requested_payment_terms: PaymentTerms | None
+    requested_installments: int | None = None
     score: float
     confidence: str
     max_installments: int

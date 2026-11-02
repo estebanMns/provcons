@@ -93,11 +93,15 @@ class OrderRepository:
         result = await self.db.execute(select(Organization.id, Organization.name).where(Organization.id.in_(org_ids)))
         return dict(result.all())
 
-    async def get_quotation_titles(self, quotation_ids: set[int]) -> dict[int, str]:
+    async def get_quotation_info(self, quotation_ids: set[int]) -> dict[int, dict]:
+        """Título, dirección de entrega y descripción de cada cotización."""
         if not quotation_ids:
             return {}
-        result = await self.db.execute(select(Quotation.id, Quotation.title).where(Quotation.id.in_(quotation_ids)))
-        return dict(result.all())
+        result = await self.db.execute(
+            select(Quotation.id, Quotation.title, Quotation.delivery_address, Quotation.description)
+            .where(Quotation.id.in_(quotation_ids))
+        )
+        return {qid: {"title": t, "delivery_address": a, "description": d} for qid, t, a, d in result.all()}
 
     async def client_history(
         self, constructora_org_id: int, provider_org_id: int, exclude_order_id: int | None = None,

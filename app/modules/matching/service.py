@@ -30,10 +30,14 @@ class MatchingService:
 
     async def create_quotation(
     self, constructora_org_id: int, title: str, items_data: list[dict], actor_user_id: int,
+    delivery_address: str | None = None, description: str | None = None, payment_installments: int = 1,
     ) -> Quotation:
         quotation = Quotation(
             constructora_org_id=constructora_org_id,
             title=title,
+            delivery_address=(delivery_address or "").strip() or None,
+            description=(description or "").strip() or None,
+            payment_installments=payment_installments,
             status=QuotationStatus.abierta,
             items=[QuotationItem(**item_data) for item_data in items_data],  # <- ya van incluidos desde el constructor
         )
@@ -43,7 +47,8 @@ class MatchingService:
         await self.audit.record(
             action="quotation.created", resource_type="Quotation", resource_id=saved.id,
             actor_user_id=actor_user_id, actor_organization_id=constructora_org_id,
-            details={"title": title, "items_count": len(items_data)},
+            details={"title": title, "items_count": len(items_data),
+                     "delivery_address": quotation.delivery_address, "payment_installments": payment_installments},
         )
         return saved
 
@@ -71,6 +76,9 @@ class MatchingService:
         return {
             "quotation_id": quotation.id,
             "title": quotation.title,
+            "delivery_address": quotation.delivery_address,
+            "description": quotation.description,
+            "payment_installments": quotation.payment_installments,
             "matches_found": len(offers),
             "ai_review": {
                 # "stored": la revisión ya se hizo al comparar; cada oferta
@@ -208,6 +216,9 @@ class MatchingService:
         return {
             "quotation_id": quotation.id,
             "title": quotation.title,
+            "delivery_address": quotation.delivery_address,
+            "description": quotation.description,
+            "payment_installments": quotation.payment_installments,
             "matches_found": len(offers),
             "ai_review": {
                 "status": review.status,
