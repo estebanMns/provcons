@@ -8,7 +8,6 @@ import type { Role } from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
-import { Excavator3D } from "@/components/auth/Excavator3D";
 import { signup, login, setToken, getMe, requestPasswordReset } from "@/lib/api";
 import type { SignupPayload } from "@/lib/api";
 import type { IconName } from "@/lib/types";
@@ -164,7 +163,7 @@ export function Auth() {
   if (step === "register") {
     return (
       <div className="auth-shell">
-        <AuthStory withExcavator />
+        <AuthStory />
         <main className="auth-main">
           <div className="register-panel">
             <button className="auth-back" onClick={() => goTo("login")}><Icon name="arrow" size={16} /> Volver</button>
@@ -237,8 +236,8 @@ export function Auth() {
   );
 }
 
-// Panel izquierdo de ingreso y registro. En el registro muestra la excavadora en 3D.
-function AuthStory({ withExcavator = false }: { withExcavator?: boolean }) {
+// Panel izquierdo de ingreso y registro
+function AuthStory() {
   return (
     <aside className="auth-story">
       <Brand />
@@ -246,7 +245,6 @@ function AuthStory({ withExcavator = false }: { withExcavator?: boolean }) {
         <p className="eyebrow">COMPRAS Y VENTAS, SIN SUPOSICIONES</p>
         <h1>Construye acuerdos con más confianza.</h1>
         <p>Compara oportunidades, entiende cada recomendación y toma mejores decisiones con información clara.</p>
-        {withExcavator && <Excavator3D />}
         <div className="auth-proof">
           <span><Icon name="shield" /></span>
           <div><strong>IA explicable y segura</strong><p>Siempre sabrás por qué recomendamos una opción.</p></div>

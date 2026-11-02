@@ -2,7 +2,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
 import { SessionCta } from "@/components/landing/SessionCta";
-import { BackgroundShapes } from "@/components/landing/BackgroundShapes";
 import type { IconName } from "@/lib/types";
 
 // Patrones de rendering: esta página es un Server Component.
@@ -55,7 +54,6 @@ export default async function Home() {
 
   return (
     <div className="landing" id="inicio">
-      <BackgroundShapes />
       <header className="landing-nav">
         <Link href="/" className="brand" aria-label="ProvCons, inicio"><span className="brand-mark"><span /></span><span>ProvCons</span></Link>
         <nav className="landing-links" aria-label="Secciones">

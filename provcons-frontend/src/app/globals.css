@@ -53,28 +53,32 @@
   --font-sans: var(--font-manrope);
 }
 
-body{
-  background-color:#0B1824;
-  position:relative;
-  isolation:isolate;
-}
-body::before{
-  content:"";position:fixed;inset:0;z-index:-2;pointer-events:none;
+/* Fondo de toda la app: crema con degradado diagonal que llega hasta la mitad de la página
+   (naranja arriba a la izquierda, verde azulado abajo a la derecha), manchas
+   de color y cuadrícula fina. Absolute: cubre el alto total, no solo la pantalla. */
+body { background-color: #FBF6EF; position: relative; isolation: isolate; min-height: 100vh; }
+body::before {
+  content: ""; position: absolute; inset: 0; z-index: -2; pointer-events: none;
   background:
-    radial-gradient(55% 50% at 85% 5%,  rgba(247,147,30,.38), transparent 70%),
-    radial-gradient(45% 45% at 0% 70%,  rgba(31,138,138,.30), transparent 70%),
-    radial-gradient(50% 40% at 60% 110%, rgba(224,102,26,.25), transparent 70%),
-    linear-gradient(180deg,#0E2232 0%,#0B1824 60%,#08121B 100%);
+    radial-gradient(700px 520px at 8% -5%,  rgba(247,147,30,.22), transparent 65%),
+    radial-gradient(600px 480px at 100% 30%, rgba(31,138,138,.16), transparent 65%),
+    radial-gradient(800px 500px at 50% 115%, rgba(255,201,77,.20), transparent 65%),
+    linear-gradient(135deg, rgba(247,147,30,.38) 0%, rgba(255,201,77,.20) 28%, transparent 50%, rgba(31,138,138,.18) 72%, rgba(31,138,138,.34) 100%);
 }
-body::after{
-  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
-  background-image:repeating-linear-gradient(135deg, rgba(255,255,255,.035) 0 1px, transparent 1px 26px);
-  -webkit-mask-image:radial-gradient(ellipse 75% 65% at 50% 35%, #000 20%, transparent 85%);
-          mask-image:radial-gradient(ellipse 75% 65% at 50% 35%, #000 20%, transparent 85%);
+body::after {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(15,42,61,.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15,42,61,.06) 1px, transparent 1px),
+    linear-gradient(rgba(15,42,61,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15,42,61,.035) 1px, transparent 1px);
+  background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 30%, transparent 85%);
+          mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 30%, transparent 85%);
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--canvas); }
+body { margin: 0; min-width: 320px; min-height: 100vh; }
 button, input { font: inherit; }
 button { color: inherit; }
 button:focus-visible, input:focus-visible { outline: 3px solid rgba(53, 107, 145, .22); outline-offset: 2px; }
@@ -103,7 +107,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(53, 107, 145
 .sidebar-close { display: none; }
 
 .main-shell { min-width: 0; flex: 1; margin-left: 252px; }
-.topbar { height: 74px; background: rgba(255,255,255,.96); border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; padding: 0 34px; position: sticky; top: 0; z-index: 20; backdrop-filter: blur(12px); }
+.topbar { height: 74px; background: rgba(251,246,239,.78); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; padding: 0 34px; position: sticky; top: 0; z-index: 20; backdrop-filter: blur(12px); }
 .org-info strong, .org-info span { display: block; }
 .org-info strong { font-size: 13px; }
 .org-info > span { font-size: 10px; color: var(--success); margin-top: 4px; }
@@ -401,22 +405,24 @@ td .small-input { min-width: 60px; max-width: 70px; }
 .audit-event time { color: var(--muted); font-size: 8px; white-space: nowrap; }
 .mobile-overlay { display: none; }
 
-.auth-shell { min-height: 100vh; display: grid; grid-template-columns: minmax(340px, .82fr) minmax(520px, 1.18fr); background: var(--surface); }
-.auth-story { min-height: 100vh; padding: 34px 44px; color: white; background: var(--brand-dark); display: flex; flex-direction: column; position: relative; overflow: hidden; }
-.auth-story::before, .auth-story::after { content: ""; position: absolute; border: 1px solid rgba(231,178,125,.17); transform: rotate(45deg); border-radius: 28px; }
+.auth-shell { min-height: 100vh; display: grid; grid-template-columns: minmax(340px, .82fr) minmax(520px, 1.18fr); background: transparent; }
+.auth-story { min-height: 100vh; padding: 34px 44px; color: var(--ink); background: transparent; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+.auth-story::before, .auth-story::after { content: ""; position: absolute; border: 1px solid rgba(21,79,70,.16); transform: rotate(45deg); border-radius: 28px; }
 .auth-story::before { width: 310px; height: 310px; right: -170px; top: 25%; }
 .auth-story::after { width: 210px; height: 210px; right: -125px; top: 37%; }
-.auth-story .brand { padding-left: 0; position: relative; z-index: 1; }
+.auth-story .brand { padding-left: 0; position: relative; z-index: 1; color: var(--brand-dark); }
+.auth-story .brand-mark { border-color: var(--brand); }
+.auth-story .brand-mark span { background: var(--brand); }
 .auth-story-content { max-width: 480px; margin: auto 0; position: relative; z-index: 1; }
-.auth-story-content > .eyebrow { color: #e7b27d; margin-bottom: 14px; }
+.auth-story-content > .eyebrow { color: #c46f31; margin-bottom: 14px; }
 .auth-story-content h1 { max-width: 430px; margin: 0 0 16px; font-size: clamp(34px, 4vw, 54px); line-height: 1.08; letter-spacing: -2px; }
-.auth-story-content > p { color: rgba(255,255,255,.68); font-size: 14px; line-height: 1.7; max-width: 430px; }
-.auth-proof { margin-top: 30px; padding-top: 22px; border-top: 1px solid rgba(255,255,255,.13); display: flex; gap: 12px; align-items: center; }
-.auth-proof > span { width: 42px; height: 42px; display: grid; place-items: center; color: #e7b27d; background: rgba(231,178,125,.1); border-radius: 10px; }
+.auth-story-content > p { color: var(--ink-soft); font-size: 14px; line-height: 1.7; max-width: 430px; }
+.auth-proof { margin-top: 30px; padding-top: 22px; border-top: 1px solid rgba(21,79,70,.15); display: flex; gap: 12px; align-items: center; }
+.auth-proof > span { width: 42px; height: 42px; display: grid; place-items: center; color: var(--brand); background: var(--brand-soft); border-radius: 10px; }
 .auth-proof strong { font-size: 11px; }
-.auth-proof p { color: rgba(255,255,255,.55); margin: 4px 0 0; font-size: 9px; }
-.auth-story > small { position: relative; z-index: 1; color: rgba(255,255,255,.4); font-size: 9px; }
-.auth-main { min-height: 100vh; display: grid; place-items: center; padding: 35px; background: var(--surface-soft); }
+.auth-proof p { color: var(--ink-soft); margin: 4px 0 0; font-size: 9px; }
+.auth-story > small { position: relative; z-index: 1; color: var(--muted); font-size: 9px; }
+.auth-main { min-height: 100vh; display: grid; place-items: center; padding: 35px; background: transparent; }
 .auth-card, .welcome-card { width: min(100%, 430px); }
 .auth-card > .eyebrow, .welcome-card > .eyebrow { margin: 25px 0 6px; }
 .auth-card h2, .welcome-card h2 { margin: 0 0 8px; font-size: 27px; letter-spacing: -.8px; }
@@ -442,9 +448,6 @@ a.brand { color: inherit; text-decoration: none; }
 .auth-divider span { height: 1px; background: var(--line); flex: 1; }
 .create-account { width: 100%; border: 1px solid var(--line); border-radius: 9px; background: white; color: var(--brand); padding: 12px; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 10px; font-weight: 800; cursor: pointer; }
 /* Registro: dos tarjetas (forma de Figma, estructura de planes) y la excavadora en 3D */
-.excavator-3d { width: 100%; height: 300px; margin: 18px 0 -6px; cursor: grab; touch-action: pan-y; }
-.excavator-3d:active { cursor: grabbing; }
-.excavator-3d canvas { display: block; width: 100% !important; height: 100% !important; }
 .register-panel { width: min(100%, 860px); }
 .register-panel > .eyebrow { margin: 22px 0 6px; }
 .register-panel > h2 { margin: 0 0 8px; font-size: 27px; letter-spacing: -.8px; }
@@ -580,30 +583,6 @@ a.brand { color: inherit; text-decoration: none; }
 /* Página principal: diseño de Figma (fondo blanco, foto con recorte, tarjetas grises) */
 .landing { --landing-bg: #ffffff; --landing-card: #f1f1f1; --landing-orange: #f89500; --notch: 36px;
   min-height: 100vh; max-width: 1440px; margin: 0 auto; padding: 24px 32px 40px; background: transparent; }
-/* Fondo: crema con degradado diagonal que llega hasta la mitad de la página
-   (naranja arriba a la izquierda, verde azulado abajo a la derecha), manchas
-   de color y cuadrícula fina. Absolute: cubre el alto total, no solo la pantalla. */
-body:has(.landing) { background-color: #FBF6EF; position: relative; isolation: isolate; min-height: 100vh; }
-body:has(.landing)::before {
-  content: ""; position: absolute; inset: 0; z-index: -2; pointer-events: none;
-  background:
-    radial-gradient(700px 520px at 8% -5%,  rgba(247,147,30,.22), transparent 65%),
-    radial-gradient(600px 480px at 100% 30%, rgba(31,138,138,.16), transparent 65%),
-    radial-gradient(800px 500px at 50% 115%, rgba(255,201,77,.20), transparent 65%),
-    linear-gradient(135deg, rgba(247,147,30,.38) 0%, rgba(255,201,77,.20) 28%, transparent 50%, rgba(31,138,138,.18) 72%, rgba(31,138,138,.34) 100%);
-}
-body:has(.landing)::after {
-  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-  background-image:
-    linear-gradient(rgba(15,42,61,.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(15,42,61,.06) 1px, transparent 1px),
-    linear-gradient(rgba(15,42,61,.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(15,42,61,.035) 1px, transparent 1px);
-  background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
-  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 30%, transparent 85%);
-          mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 30%, transparent 85%);
-}
-
 /* Figuras (triángulos, X y O) que viajan alrededor del fondo, detrás del contenido */
 .bg-shapes { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
 .bg-tri { position: absolute; width: var(--s); height: var(--s); will-change: translate, rotate;
