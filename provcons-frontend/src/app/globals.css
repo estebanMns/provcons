@@ -53,6 +53,30 @@
   --font-sans: var(--font-manrope);
 }
 
+body{
+  background-color:#FBF6EF;
+  position:relative;
+  isolation:isolate;
+}
+body::before{
+  content:"";position:fixed;inset:0;z-index:-2;pointer-events:none;
+  background:
+    radial-gradient(700px 520px at 8% -5%,  rgba(247,147,30,.22), transparent 65%),
+    radial-gradient(600px 480px at 100% 30%, rgba(31,138,138,.16), transparent 65%),
+    radial-gradient(800px 500px at 50% 115%, rgba(255,201,77,.20), transparent 65%);
+}
+body::after{
+  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(15,42,61,.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15,42,61,.06) 1px, transparent 1px),
+    linear-gradient(rgba(15,42,61,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15,42,61,.035) 1px, transparent 1px);
+  background-size:120px 120px,120px 120px,24px 24px,24px 24px;
+  -webkit-mask-image:radial-gradient(ellipse 80% 70% at 50% 40%, #000 30%, transparent 85%);
+          mask-image:radial-gradient(ellipse 80% 70% at 50% 40%, #000 30%, transparent 85%);
+}
+
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--canvas); }
 button, input { font: inherit; }
