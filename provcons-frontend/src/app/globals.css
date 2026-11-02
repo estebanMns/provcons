@@ -599,15 +599,46 @@ body:has(.landing) { background: #ffffff; }
 .landing-projects span { display: block; margin-top: 4px; font-size: 12px; font-weight: 600; text-transform: uppercase; color: #3a3a3a; line-height: 1.4; }
 
 /* Tarjetas con el estilo de Figma: gris claro, esquinas grandes, sin borde */
-.landing-card { background: var(--landing-card); border-radius: 28px; padding: 24px 26px; }
+.landing-card { --glow: rgba(248, 149, 0, .35); --ring: rgba(248, 149, 0, .55);
+  position: relative; overflow: hidden; background: var(--landing-card); border-radius: 28px; padding: 24px 26px;
+  transition: transform .25s ease, box-shadow .25s ease; }
+/* Efecto de selección: sube, aparece el anillo y un brillo la cruza */
+.landing-card:hover { transform: translateY(-6px) scale(1.02); box-shadow: 0 0 0 2px var(--ring), 0 18px 36px -12px var(--glow); }
+.landing-card:active { transform: translateY(-2px) scale(.98); transition-duration: .1s; }
+.landing-card::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,.45) 50%, transparent 70%);
+  transform: translateX(-120%); }
+.landing-card:hover::after { transform: translateX(120%); transition: transform .7s ease; }
+.landing-card > * { position: relative; z-index: 1; }
+
+/* Colores de cada tarjeta */
+.landing-stat.tone-1 { background: linear-gradient(135deg, #fff1dc, #ffe2bf); --glow: rgba(217, 115, 13, .35); --ring: rgba(217, 115, 13, .45); }
+.landing-stat.tone-1 span, .landing-stat.tone-1 strong { color: #d9730d; }
+.landing-stat.tone-2 { background: linear-gradient(135deg, #1b3a55, #0f2236); --glow: rgba(15, 34, 54, .5); --ring: rgba(27, 58, 85, .6); }
+.landing-stat.tone-2 span { color: rgba(255,255,255,.75); }
+.landing-stat.tone-2 strong { color: #fff; }
+.landing-stat.tone-3 { background: linear-gradient(135deg, #f89a2b, #e5631b); --glow: rgba(229, 99, 27, .45); --ring: rgba(229, 99, 27, .55); }
+.landing-stat.tone-3 span { color: rgba(255,255,255,.88); }
+.landing-stat.tone-3 strong { color: #fff; }
+.landing-stat.tone-4 { background: linear-gradient(135deg, #e2f4f0, #cbe8e1); --glow: rgba(31, 111, 102, .3); --ring: rgba(31, 111, 102, .45); }
+.landing-stat.tone-4 span, .landing-stat.tone-4 strong { color: #1f6f66; }
+.landing-steps .tone-1 { background: linear-gradient(135deg, #fff5e8, #ffe5c4); --icon: #f89500; --step: #c46a00; --glow: rgba(248, 149, 0, .3); --ring: rgba(248, 149, 0, .5); }
+.landing-steps .tone-2 { background: linear-gradient(135deg, #fff1e8, #fddccb); --icon: linear-gradient(135deg, #f7931e, #e5631b); --step: #c4501a; --glow: rgba(229, 99, 27, .3); --ring: rgba(229, 99, 27, .5); }
+.landing-steps .tone-3 { background: linear-gradient(135deg, #ebf6f3, #d3ebe5); --icon: #1d4f4a; --step: #1d4f4a; --glow: rgba(29, 79, 74, .28); --ring: rgba(29, 79, 74, .45); }
 .landing-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
 .landing-stat span { display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #3a3a3a; }
 .landing-stat strong { display: block; margin-top: 8px; font-size: 38px; line-height: 1; color: #000; }
 .landing-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; scroll-margin-top: 24px; }
-.landing-steps small { display: block; color: #b86a00; font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; margin-top: 16px; }
+.landing-steps small { display: block; color: var(--step, #b86a00); font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; margin-top: 16px; }
 .landing-steps h2 { font-size: 19px; margin: 6px 0 8px; text-transform: uppercase; color: #000; }
 .landing-steps p { color: #3a3a3a; font-size: 13px; line-height: 1.6; margin: 0; }
-.landing-step-icon { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; color: #fff; background: var(--landing-orange); }
+.landing-step-icon { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; color: #fff; background: var(--icon, var(--landing-orange)); transition: transform .25s ease; }
+.landing-card:hover .landing-step-icon { transform: rotate(-8deg) scale(1.1); }
+@media (prefers-reduced-motion: reduce) {
+  .landing-card, .landing-card:hover, .landing-card:active { transform: none; transition: box-shadow .2s ease; }
+  .landing-card::after { display: none; }
+  .landing-card:hover .landing-step-icon { transform: none; }
+}
 .landing-footer { margin-top: 36px; color: var(--muted); }
 
 @media (max-width: 1100px) {

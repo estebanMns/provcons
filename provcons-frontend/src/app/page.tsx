@@ -94,8 +94,8 @@ export default async function Home() {
       </section>
 
       <section className="landing-stats" aria-label="Cifras de la plataforma">
-        {figures.map((f) => (
-          <div key={f.label} className="landing-card landing-stat">
+        {figures.map((f, i) => (
+          <div key={f.label} className={`landing-card landing-stat tone-${i + 1}`}>
             <span>{f.label}</span>
             <strong>{f.value ?? "—"}</strong>
           </div>
@@ -104,7 +104,7 @@ export default async function Home() {
 
       <section className="landing-steps" id="como-funciona">
         {STEPS.map((s, i) => (
-          <article key={s.title} className="landing-card">
+          <article key={s.title} className={`landing-card tone-${i + 1}`}>
             <span className="landing-step-icon"><Icon name={s.icon} size={20} /></span>
             <small>Paso {i + 1}</small>
             <h2>{s.title}</h2>
