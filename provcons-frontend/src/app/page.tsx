@@ -69,8 +69,8 @@ export default async function Home() {
         <Image src="/landing/hero.jpg" alt="" fill priority sizes="(max-width: 820px) 100vw, 1400px" className="landing-hero-image" />
         <div className="landing-hero-content">
           <p className="eyebrow">PLATAFORMA B2B PARA EL SECTOR CONSTRUCCIÓN</p>
-          <h1>Compra materiales al mejor proveedor, con IA que puedes entender.</h1>
-          <p>Sube tu lista de materiales y ProvCons compara a los proveedores por precio, disponibilidad y cobertura. Te dice a quién comprarle y por qué.</p>
+          <h1>Compra materiales de calidad para una construcción de calidad.</h1>
+          <p>Sube tu lista de materiales y la IA de ProvCons compara a los proveedores por precio, disponibilidad y cobertura. Te dice a quién comprarle y por qué.</p>
           <div className="landing-actions">
             <Link className="btn landing-cta" href="/login?registro=1"><span>Crear una organización</span></Link>
             <Link className="btn landing-ghost" href="/login"><span>Ingresar</span></Link>
