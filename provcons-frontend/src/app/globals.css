@@ -579,10 +579,55 @@ a.brand { color: inherit; text-decoration: none; }
 /* Página de presentación pública (SSG + ISR) */
 /* Página principal: diseño de Figma (fondo blanco, foto con recorte, tarjetas grises) */
 .landing { --landing-bg: #ffffff; --landing-card: #f1f1f1; --landing-orange: #f89500; --notch: 36px;
-  min-height: 100vh; max-width: 1440px; margin: 0 auto; padding: 24px 32px 40px; background: var(--landing-bg); }
-body:has(.landing) { background: #ffffff; }
+  min-height: 100vh; max-width: 1440px; margin: 0 auto; padding: 24px 32px 40px; background: transparent; }
+/* Fondo: crema con degradado diagonal que llega hasta la mitad de la página
+   (naranja arriba a la izquierda, verde azulado abajo a la derecha), manchas
+   de color y cuadrícula fina. Absolute: cubre el alto total, no solo la pantalla. */
+body:has(.landing) { background-color: #FBF6EF; position: relative; isolation: isolate; min-height: 100vh; }
+body:has(.landing)::before {
+  content: ""; position: absolute; inset: 0; z-index: -2; pointer-events: none;
+  background:
+    radial-gradient(700px 520px at 8% -5%,  rgba(247,147,30,.22), transparent 65%),
+    radial-gradient(600px 480px at 100% 30%, rgba(31,138,138,.16), transparent 65%),
+    radial-gradient(800px 500px at 50% 115%, rgba(255,201,77,.20), transparent 65%),
+    linear-gradient(135deg, rgba(247,147,30,.38) 0%, rgba(255,201,77,.20) 28%, transparent 50%, rgba(31,138,138,.18) 72%, rgba(31,138,138,.34) 100%);
+}
+body:has(.landing)::after {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(15,42,61,.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15,42,61,.06) 1px, transparent 1px),
+    linear-gradient(rgba(15,42,61,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15,42,61,.035) 1px, transparent 1px);
+  background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 30%, transparent 85%);
+          mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 30%, transparent 85%);
+}
+
+/* Figuras (triángulos, X y O) que viajan alrededor del fondo, detrás del contenido */
+.bg-shapes { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.bg-tri { position: absolute; width: var(--s); height: var(--s); will-change: translate, rotate;
+  animation: tri-orbit-1 var(--dur) ease-in-out var(--delay) infinite, tri-spin var(--spin) linear var(--delay) infinite; }
+.bg-tri svg { display: block; width: 100%; height: 100%; }
+.bg-tri.orbit-2 { animation-name: tri-orbit-2, tri-spin; }
+.bg-tri.orbit-3 { animation-name: tri-orbit-3, tri-spin; }
+.bg-tri.reverse { animation-direction: reverse, reverse; }
+@keyframes tri-spin { to { rotate: 360deg; } }
+@keyframes tri-orbit-1 { 0%, 100% { translate: 0 0; } 25% { translate: 34vw 14vh; } 50% { translate: 18vw 48vh; } 75% { translate: -10vw 26vh; } }
+@keyframes tri-orbit-2 { 0%, 100% { translate: 0 0; } 25% { translate: -28vw 18vh; } 50% { translate: -8vw 52vh; } 75% { translate: 22vw 30vh; } }
+@keyframes tri-orbit-3 { 0%, 100% { translate: 0 0; } 25% { translate: 18vw -14vh; } 50% { translate: 40vw 22vh; } 75% { translate: 8vw 38vh; } }
+@media (max-width: 820px) {
+  .bg-tri.desktop-only { display: none; }
+  .bg-tri { width: calc(var(--s) * .6); height: calc(var(--s) * .6); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bg-tri { animation: none; }
+}
 .landing-nav { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; margin-bottom: 20px; }
 .landing-nav .brand { padding: 0; color: var(--brand-dark); text-decoration: none; }
+/* Logo en verde de la marca: el arena se perdía sobre el fondo naranja crema */
+.landing-nav .brand-mark { border-color: var(--brand); }
+.landing-nav .brand-mark span { background: var(--brand); }
 .landing-links { display: flex; gap: 48px; }
 .landing-links a { color: #000; font-size: 15px; font-weight: 700; text-decoration: none; }
 .landing-links a:hover { color: var(--landing-orange); }
@@ -660,6 +705,32 @@ body:has(.landing) { background: #ffffff; }
   .landing-card:hover .landing-step-icon { transform: none; }
 }
 .landing-footer { margin-top: 36px; color: var(--muted); }
+
+/* Recorte de la foto con máscara: deja ver el fondo real a través del recorte */
+@media (min-width: 821px) {
+  .landing { --nw: 468px; --nh: 188px; }
+  .landing-hero { background: transparent; }
+  .landing-hero-image, .landing-hero::before {
+    --r: var(--notch);
+    -webkit-mask:
+      radial-gradient(circle at 0 0, transparent var(--r), #000 calc(var(--r) + .5px)) right 0 bottom var(--nh) / var(--r) var(--r) no-repeat,
+      radial-gradient(circle at 0 0, transparent var(--r), #000 calc(var(--r) + .5px)) right var(--nw) bottom 0 / var(--r) var(--r) no-repeat,
+      radial-gradient(circle at 100% 100%, transparent var(--r), #000 calc(var(--r) + .5px)) right calc(var(--nw) - var(--r)) bottom calc(var(--nh) - var(--r)) / var(--r) var(--r) no-repeat,
+      linear-gradient(#000 0 0) right bottom / var(--nw) var(--nh) no-repeat,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      radial-gradient(circle at 0 0, transparent var(--r), #000 calc(var(--r) + .5px)) right 0 bottom var(--nh) / var(--r) var(--r) no-repeat,
+      radial-gradient(circle at 0 0, transparent var(--r), #000 calc(var(--r) + .5px)) right var(--nw) bottom 0 / var(--r) var(--r) no-repeat,
+      radial-gradient(circle at 100% 100%, transparent var(--r), #000 calc(var(--r) + .5px)) right calc(var(--nw) - var(--r)) bottom calc(var(--nh) - var(--r)) / var(--r) var(--r) no-repeat,
+      linear-gradient(#000 0 0) right bottom / var(--nw) var(--nh) no-repeat,
+      linear-gradient(#000 0 0);
+    mask-composite: exclude;
+  }
+  .landing-notch { width: var(--nw); height: var(--nh); background: transparent; }
+  .landing-notch::before, .landing-notch::after { display: none; }
+  .landing-notch-card { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; }
+}
 
 @media (max-width: 1100px) {
   .landing-links { gap: 28px; }
