@@ -60,7 +60,8 @@ class MatchRepository:
         la comparación por texto se hace en memoria y la revisión con IA
         necesita ver el catálogo completo para encontrar sinónimos."""
         result = await self.db.execute(
-            select(ProviderInventoryItem).order_by(ProviderInventoryItem.id).limit(limit)
+            select(ProviderInventoryItem).where(ProviderInventoryItem.is_active.is_(True))
+            .order_by(ProviderInventoryItem.id).limit(limit)
         )
         return list(result.scalars().all())
 

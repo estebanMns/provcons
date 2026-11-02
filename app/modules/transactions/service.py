@@ -164,15 +164,20 @@ class OrderService:
             "note": (note or "").strip() or None,
         }
         needs_approval = order.requires_client_approval(installments)
+        stock: list[dict] = []
         try:
+            order.require_open_for_provider()
             if needs_approval:
                 order.propose(terms, now)
             else:
+                # Primero el stock: si no alcanza, la orden no se confirma
+                stock = await self._take_stock(order)
                 order.confirm_directly(terms, now)
         except ValueError as e:
             raise ConflictError(str(e))
         action = "order.proposed" if needs_approval else "order.confirmed"
-        return await self._save_and_record(order, action, actor_user_id, actor_org_id, details=terms)
+        details = {**terms, "stock": stock} if stock else terms
+        return await self._save_and_record(order, action, actor_user_id, actor_org_id, details=details)
 
     async def respond_proposal(
         self, order_id: int, actor_user_id: int, actor_org_id: int, accept: bool, now: datetime | None = None,
@@ -180,15 +185,19 @@ class OrderService:
         order = await self._get_for_party(order_id, actor_org_id)
         if order.constructora_org_id != actor_org_id:
             raise ForbiddenError("Solo la constructora puede responder la propuesta")
+        stock: list[dict] = []
         try:
             if accept:
+                order.require_pending_proposal()
+                stock = await self._take_stock(order)  # al aceptar, la orden queda confirmada
                 order.accept_proposal(now or datetime.now(timezone.utc))
             else:
                 order.reject_proposal()
         except ValueError as e:
             raise ConflictError(str(e))
         action = "order.proposal_accepted" if accept else "order.proposal_rejected"
-        return await self._save_and_record(order, action, actor_user_id, actor_org_id)
+        return await self._save_and_record(order, action, actor_user_id, actor_org_id,
+                                           details={"stock": stock} if stock else None)
 
     async def advance_order(self, order_id: int, actor_user_id: int, actor_org_id: int) -> dict:
         order = await self._get_for_party(order_id, actor_org_id)
@@ -207,9 +216,47 @@ class OrderService:
         if not order.can_be_cancelled():
             raise ConflictError("Esta orden ya no puede cancelarse")
         action = "order.rejected" if actor_org_id == order.provider_org_id else "order.cancelled"
+        # Solo una orden confirmada había descontado stock: se devuelve
+        stock = await self._return_stock(order) if order.status == OrderStatus.confirmada else []
         order.status = OrderStatus.cancelada
         order.proposal = None
-        return await self._save_and_record(order, action, actor_user_id, actor_org_id)
+        return await self._save_and_record(order, action, actor_user_id, actor_org_id,
+                                           details={"stock": stock} if stock else None)
+
+    async def _stock_needs(self, order: Order) -> list[tuple]:
+        """[(producto, cantidad)] sumando los materiales que salen del mismo producto."""
+        inventory = await self.repository.inventory_for_order(order)
+        needs: dict[int, list] = {}
+        for item in order.items:
+            product = inventory.get(item.match_id)
+            if product is not None:
+                needs.setdefault(id(product), [product, 0.0])[1] += item.quantity
+        return [(product, qty) for product, qty in needs.values()]
+
+    async def _take_stock(self, order: Order) -> list[dict]:
+        """Descuenta lo vendido. Revisa todo antes de tocar nada: si un material
+        no alcanza, no se descuenta ninguno."""
+        needs = await self._stock_needs(order)
+        short = [
+            f"{p.material_name} (tienes {p.quantity_available:g}, la orden pide {qty:g})"
+            for p, qty in needs if qty > (p.quantity_available or 0)
+        ]
+        if short:
+            raise ConflictError("Stock insuficiente para: " + "; ".join(short))
+        changes = []
+        for product, qty in needs:
+            before = product.quantity_available
+            product.take_stock(qty)
+            changes.append({"inventory_id": product.id, "sku": product.sku, "before": before, "after": product.quantity_available})
+        return changes
+
+    async def _return_stock(self, order: Order) -> list[dict]:
+        changes = []
+        for product, qty in await self._stock_needs(order):
+            before = product.quantity_available
+            product.return_stock(qty)
+            changes.append({"inventory_id": product.id, "sku": product.sku, "before": before, "after": product.quantity_available})
+        return changes
 
     async def _get_for_party(self, order_id: int, actor_org_id: int) -> Order:
         order = await self.repository.get_by_id(order_id)

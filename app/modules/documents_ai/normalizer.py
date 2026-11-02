@@ -11,6 +11,8 @@ Devuelve ÚNICAMENTE un JSON con esta forma exacta, sin texto adicional:
 {
   "items": [
     {
+      "sku": string,                // código o referencia del producto si el texto lo trae
+                                     // (columnas tipo "Código", "Ref", "SKU", "Item"); null si no hay
       "material_name": string,      // nombre normalizado del material, en minúsculas
       "quantity_available": number, // SOLO el número, sin unidad ni texto
       "unit": string,                // unidad separada: "bulto", "kg", "m3", "unidad", etc.
@@ -21,6 +23,7 @@ Devuelve ÚNICAMENTE un JSON con esta forma exacta, sin texto adicional:
 }
 
 Si no puedes determinar un valor con certeza, usa null en ese campo — nunca inventes datos.
+Nunca inventes un código: si la fila no trae uno, "sku" va en null.
 """
 
 

@@ -32,7 +32,10 @@ async def public_stats(response: Response, db: AsyncSession = Depends(get_db)) -
     stats = PublicStats(
         providers=await scalar(org_count(OrgType.proveedor)),
         constructoras=await scalar(org_count(OrgType.constructora)),
-        catalog_products=await scalar(select(func.count(func.distinct(func.lower(ProviderInventoryItem.material_name))))),
+        catalog_products=await scalar(
+            select(func.count(func.distinct(func.lower(ProviderInventoryItem.material_name))))
+            .where(ProviderInventoryItem.is_active.is_(True))
+        ),
         quotations_compared=await scalar(
             select(func.count(func.distinct(Quotation.id)))
             .join(QuotationItem, QuotationItem.quotation_id == Quotation.id)

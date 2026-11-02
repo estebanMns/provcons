@@ -67,7 +67,7 @@ class DashboardService:
     async def _provider(self, org_id: int) -> dict:
         inventory_products = (await self.db.execute(
             select(func.count(func.distinct(func.lower(ProviderInventoryItem.material_name))))
-            .where(ProviderInventoryItem.provider_org_id == org_id)
+            .where(ProviderInventoryItem.provider_org_id == org_id, ProviderInventoryItem.is_active.is_(True))
         )).scalar_one()
         opportunities = await self._opportunities(org_id)
         return {

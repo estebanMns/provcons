@@ -67,7 +67,7 @@ class Order(Base, TimestampMixin):
     def can_be_cancelled(self) -> bool:
         return self.status in (OrderStatus.pendiente, OrderStatus.confirmada)
 
-    def _require_open_for_provider(self) -> None:
+    def require_open_for_provider(self) -> None:
         if self.status != OrderStatus.pendiente:
             raise ValueError(f"No se puede aceptar una orden en estado {self.status.value}")
         if self.proposal:
@@ -93,16 +93,19 @@ class Order(Base, TimestampMixin):
         self.status = OrderStatus.confirmada
 
     def confirm_directly(self, terms: dict, now: datetime) -> None:
-        self._require_open_for_provider()
+        self.require_open_for_provider()
         self.apply_terms(terms, now)
 
     def propose(self, terms: dict, now: datetime) -> None:
-        self._require_open_for_provider()
+        self.require_open_for_provider()
         self.proposal = {**terms, "proposed_at": now.isoformat()}
 
-    def accept_proposal(self, now: datetime) -> None:
-        if not self.proposal:
+    def require_pending_proposal(self) -> None:
+        if self.status != OrderStatus.pendiente or not self.proposal:
             raise ValueError("Esta orden no tiene una propuesta por responder")
+
+    def accept_proposal(self, now: datetime) -> None:
+        self.require_pending_proposal()
         self.apply_terms(self.proposal, now)
 
     def reject_proposal(self) -> None:

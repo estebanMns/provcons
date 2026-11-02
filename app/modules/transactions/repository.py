@@ -72,6 +72,21 @@ class OrderRepository:
         )
         return set(result.scalars().all())
 
+    async def inventory_for_order(self, order: Order) -> dict[int, ProviderInventoryItem]:
+        """Producto de inventario de cada material de la orden ({match_id: producto}).
+        FOR UPDATE: dos aceptaciones al mismo tiempo no venden el mismo stock.
+        Las órdenes antiguas sin match se saltan."""
+        match_ids = [i.match_id for i in order.items if i.match_id]
+        if not match_ids:
+            return {}
+        result = await self.db.execute(
+            select(Match.id, ProviderInventoryItem)
+            .join(ProviderInventoryItem, ProviderInventoryItem.id == Match.provider_inventory_id)
+            .where(Match.id.in_(match_ids))
+            .with_for_update(of=ProviderInventoryItem)
+        )
+        return {match_id: item for match_id, item in result.all()}
+
     async def get_organization_names(self, org_ids: set[int]) -> dict[int, str]:
         if not org_ids:
             return {}

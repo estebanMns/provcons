@@ -68,6 +68,7 @@ async function fetchAPI<T>(
     throw new Error(error.detail || `API error: ${response.status}`);
   }
 
+  if (response.status === 204) return undefined as T;  // sin contenido (ej. eliminar)
   return response.json();
 }
 
@@ -318,6 +319,7 @@ export async function uploadQuotationFile(
 
 export interface InventoryItem {
   id: number;
+  sku: string;  // código del producto: al volver a subir un archivo, el mismo código suma al stock
   material_name: string;
   quantity_available: number;
   unit: string;
@@ -327,13 +329,25 @@ export interface InventoryItem {
 export interface InventoryUploadResult {
   provider_org_id: number;
   items_extracted: number;
-  items_saved: number;
+  created: number;   // productos nuevos
+  updated: number;   // productos que ya existían y sumaron cantidad
+  skipped: number;   // filas sin datos suficientes
   file_name: string;
   saved_items: InventoryItem[];
 }
 
 export async function getInventory(orgId: number): Promise<InventoryItem[]> {
   return fetchAPI<InventoryItem[]>(`/documents/inventory/${orgId}`);
+}
+
+export type InventoryChanges = Partial<Pick<InventoryItem, "sku" | "material_name" | "unit" | "quantity_available">> & { unit_price?: number };
+
+export async function updateInventoryItem(orgId: number, itemId: number, changes: InventoryChanges): Promise<InventoryItem> {
+  return fetchAPI<InventoryItem>(`/documents/inventory/${orgId}/${itemId}`, { method: "PATCH", body: JSON.stringify(changes) });
+}
+
+export async function deleteInventoryItem(orgId: number, itemId: number): Promise<void> {
+  await fetchAPI<void>(`/documents/inventory/${orgId}/${itemId}`, { method: "DELETE" });
 }
 
 export async function uploadInventoryFile(

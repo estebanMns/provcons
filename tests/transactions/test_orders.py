@@ -63,6 +63,10 @@ class FakeOrderRepo:
     async def client_history(self, constructora_org_id, provider_org_id, exclude_order_id=None):
         return ClientHistory(delivered=8, cancelled_by_client=0, months_on_platform=6)
 
+    async def inventory_for_order(self, order):
+        by_match = {match.id: inventory for match, _, inventory in self.offers}
+        return {i.match_id: by_match[i.match_id] for i in order.items if i.match_id in by_match}
+
 
 class FakeAudit:
     def __init__(self):
@@ -267,3 +271,54 @@ def test_la_evaluacion_solo_la_ve_el_proveedor_y_antes_de_aceptar(setup):
     run(service.confirm_order(order_id, 2, VALLE, delivery_days=5))
     with pytest.raises(ConflictError):
         run(service.evaluate_order(order_id, VALLE))
+
+
+def _stock(repo, ids, key):
+    """El producto de inventario detrás de una oferta."""
+    return next(inv for match, _, inv in repo.offers if match.id == ids[key])
+
+
+def test_confirmar_descuenta_el_stock_y_cancelar_lo_devuelve(setup):
+    service, repo, audit, _, ids = setup
+    product = _stock(repo, ids, "varilla_valle")  # 1000 en inventario, la orden pide 50
+    order_id = _create(service, [ids["varilla_valle"]])[0]["id"]
+    assert product.quantity_available == 1000  # crear la orden no descuenta
+
+    asyncio.run(service.confirm_order(order_id, 2, VALLE, delivery_days=5))
+    assert product.quantity_available == 950
+
+    asyncio.run(service.cancel_order(order_id, 1, CONSTRUCTORA))
+    assert product.quantity_available == 1000
+
+
+def test_aceptar_la_propuesta_descuenta_y_rechazar_no(setup):
+    service, repo, _, _, ids = setup
+    product = _stock(repo, ids, "varilla_valle")
+    order_id = _create(service, [ids["varilla_valle"]])[0]["id"]
+    run = asyncio.run
+    run(service.confirm_order(order_id, 2, VALLE, delivery_days=5, installments=3))
+    assert product.quantity_available == 1000  # la propuesta no descuenta
+    run(service.respond_proposal(order_id, 1, CONSTRUCTORA, accept=False))
+    assert product.quantity_available == 1000
+    run(service.confirm_order(order_id, 2, VALLE, delivery_days=5, installments=3))
+    run(service.respond_proposal(order_id, 1, CONSTRUCTORA, accept=True))
+    assert product.quantity_available == 950
+
+
+def test_sin_stock_suficiente_no_se_confirma(setup):
+    service, repo, _, _, ids = setup
+    product = _stock(repo, ids, "varilla_valle")
+    product.quantity_available = 20  # la orden pide 50
+    order_id = _create(service, [ids["varilla_valle"]])[0]["id"]
+    with pytest.raises(ConflictError, match="tienes 20, la orden pide 50"):
+        asyncio.run(service.confirm_order(order_id, 2, VALLE, delivery_days=5))
+    assert product.quantity_available == 20
+    assert repo.orders[order_id].status == OrderStatus.pendiente
+
+
+def test_cancelar_una_pendiente_no_toca_el_stock(setup):
+    service, repo, _, _, ids = setup
+    product = _stock(repo, ids, "varilla_valle")
+    order_id = _create(service, [ids["varilla_valle"]])[0]["id"]
+    asyncio.run(service.cancel_order(order_id, 2, VALLE))  # el proveedor la rechaza sin aceptar
+    assert product.quantity_available == 1000
