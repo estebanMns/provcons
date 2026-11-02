@@ -5,7 +5,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
 
 from app.core.metrics import metrics
-from app.dependencies.auth import get_current_user
+from app.dependencies.auth import require_platform_admin
 from app.modules.users.models import User
 
 router = APIRouter(prefix="/metrics", tags=["Métricas de rendimiento"])
@@ -20,8 +20,9 @@ async def prometheus_metrics() -> Response:
 
 
 @router.get("/summary")
-async def metrics_summary(current_user: User = Depends(get_current_user)) -> dict:
-    """Percentiles por ruta, IA, gRPC, event loop y Web Vitals (pantalla Rendimiento)."""
+async def metrics_summary(admin: User = Depends(require_platform_admin)) -> dict:
+    """Percentiles por ruta, IA, gRPC, event loop y Web Vitals (pantalla
+    Rendimiento). Solo el administrador de la app."""
     return metrics.summary()
 
 

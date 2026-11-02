@@ -1,10 +1,16 @@
-from sqlalchemy import select
+from datetime import datetime, timezone
+from sqlalchemy import case, func, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from app.core.audit import AuditLog
+from app.modules.transactions.credit import ClientHistory
 from app.modules.transactions.models import Order, OrderItem, OrderStatus
 from app.modules.matching.models import Match, Quotation, QuotationItem
 from app.modules.documents_ai.models import ProviderInventoryItem
 from app.modules.users.models import Organization
+
+
+_OPEN = (OrderStatus.pendiente, OrderStatus.confirmada, OrderStatus.en_transito)
 
 
 class OrderRepository:
@@ -77,3 +83,42 @@ class OrderRepository:
             return {}
         result = await self.db.execute(select(Quotation.id, Quotation.title).where(Quotation.id.in_(quotation_ids)))
         return dict(result.all())
+
+    async def client_history(
+        self, constructora_org_id: int, provider_org_id: int, exclude_order_id: int | None = None,
+    ) -> ClientHistory:
+        """Cómo ha cumplido la constructora con todos los proveedores, con
+        consultas agregadas. No cuenta la orden que se está evaluando."""
+        not_this = Order.id != exclude_order_id if exclude_order_id is not None else true()
+        rows = await self.db.execute(
+            select(
+                Order.status, func.count(Order.id),
+                func.coalesce(func.sum(Order.total_amount), 0),
+                func.sum(case((Order.provider_org_id == provider_org_id, 1), else_=0)),
+            )
+            .where(Order.constructora_org_id == constructora_org_id, not_this)
+            .group_by(Order.status)
+        )
+        delivered = open_orders = with_provider = delivered_with_provider = 0
+        purchased = 0.0
+        for status, total, amount, with_prov in rows.all():
+            with_provider += int(with_prov or 0)
+            if status == OrderStatus.entregada:
+                delivered, purchased, delivered_with_provider = total, float(amount), int(with_prov or 0)
+            elif status in _OPEN:
+                open_orders += total
+
+        # Canceladas por la constructora; los rechazos del proveedor no le restan
+        cancelled = await self.db.scalar(
+            select(func.count(func.distinct(Order.id)))
+            .join(AuditLog, (AuditLog.resource_type == "Order") & (AuditLog.resource_id == Order.id))
+            .where(Order.constructora_org_id == constructora_org_id, AuditLog.action == "order.cancelled")
+        )
+        created = await self.db.scalar(select(Organization.created_at).where(Organization.id == constructora_org_id))
+        months = (datetime.now(timezone.utc) - created).days / 30 if created else 0.0
+
+        return ClientHistory(
+            delivered=delivered, cancelled_by_client=int(cancelled or 0), open_orders=open_orders,
+            total_purchased=purchased, orders_with_provider=with_provider,
+            delivered_with_provider=delivered_with_provider, months_on_platform=months,
+        )

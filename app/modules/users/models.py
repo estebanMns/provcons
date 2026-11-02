@@ -1,6 +1,6 @@
 import enum
 from passlib.context import CryptContext
-from sqlalchemy import String, Enum, ForeignKey
+from sqlalchemy import Boolean, String, Enum, ForeignKey, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.session import Base
 from app.db.mixins import TimestampMixin
@@ -41,6 +41,10 @@ class User(Base, TimestampMixin):
     password_hash: Mapped[str] = mapped_column(String(255))
     full_name: Mapped[str] = mapped_column(String(200))
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.lector)
+    # Administrador de ProvCons (ve el rendimiento de la app). No es lo mismo
+    # que role=admin, que recibe quien crea su empresa al registrarse. Solo se
+    # da con scripts/make_admin.py.
+    is_platform_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
     organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"))
     organization: Mapped["Organization"] = relationship(back_populates="users")
@@ -53,3 +57,6 @@ class User(Base, TimestampMixin):
 
     def is_admin(self) -> bool:
         return self.role == UserRole.admin
+
+    def is_platform_administrator(self) -> bool:
+        return bool(self.is_platform_admin)

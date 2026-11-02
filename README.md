@@ -10,14 +10,15 @@ Plataforma B2B para el sector construcción que conecta constructoras con provee
 1. [Cómo funciona](#cómo-funciona)
 2. [Arquitectura](#arquitectura)
 3. [Predicción con IA](#predicción-con-ia)
-4. [Principios SOLID, patrones y buenas prácticas](#principios-solid-patrones-y-buenas-prácticas)
-5. [gRPC: el motor de comparación](#grpc-el-motor-de-comparación)
-6. [Event loop y concurrencia](#event-loop-y-concurrencia)
-7. [Métricas de rendimiento](#métricas-de-rendimiento)
-8. [Patrones de rendering](#patrones-de-rendering)
-9. [Web Workers](#web-workers)
-10. [Correr el proyecto en local](#correr-el-proyecto-en-local)
-11. [Pruebas](#pruebas)
+4. [Condiciones del proveedor: cuotas y entrega](#condiciones-del-proveedor-cuotas-y-entrega)
+5. [Principios SOLID, patrones y buenas prácticas](#principios-solid-patrones-y-buenas-prácticas)
+6. [gRPC: el motor de comparación](#grpc-el-motor-de-comparación)
+7. [Event loop y concurrencia](#event-loop-y-concurrencia)
+8. [Métricas de rendimiento](#métricas-de-rendimiento)
+9. [Patrones de rendering](#patrones-de-rendering)
+10. [Web Workers](#web-workers)
+11. [Correr el proyecto en local](#correr-el-proyecto-en-local)
+12. [Pruebas](#pruebas)
 
 ## Cómo funciona
 
@@ -26,7 +27,8 @@ Plataforma B2B para el sector construcción que conecta constructoras con provee
 3. **Comparación de proveedores.** Califica cada oferta por compatibilidad, disponibilidad y precio frente a los demás proveedores. Arma un ranking, una recomendación y la "mejor combinación" (comprar cada material al más conveniente).
 4. **Predicción a futuro.** Para cada opción de compra estima la probabilidad de que el proveedor cumpla, los días de entrega y el costo esperado contando el riesgo. Gemini lo explica en lenguaje claro. Ver [Predicción con IA](#predicción-con-ia).
 5. **Cuentas.** Cada organización tiene sus usuarios. Si alguien olvida su contraseña, recibe un correo (Resend) con un enlace que vence en 30 minutos y sirve una sola vez.
-6. **Órdenes.** Se crea una orden por proveedor, que guarda los precios del momento de la compra. El proveedor confirma, despacha y entrega. Todo queda en el historial de actividad.
+6. **Órdenes.** Se crea una orden por proveedor, que guarda los precios del momento de la compra. Antes de aceptar, el proveedor ve cómo cumple la constructora, decide cuántas cuotas darle y en cuántos días entrega. Luego despacha y entrega, y la orden avisa si se atrasa. Todo queda en el historial de actividad. Ver [Condiciones del proveedor](#condiciones-del-proveedor-cuotas-y-entrega).
+7. **Administrador de la app.** La pantalla "Rendimiento" solo la ve el administrador de ProvCons, un permiso distinto del admin de cada empresa.
 
 ## Arquitectura
 
@@ -101,6 +103,34 @@ Cada "opción" es un plan para comprar el pedido completo. Elegir un proveedor s
 
 **Cuota gratuita de Gemini:** la predicción se guarda 15 minutos en una caché en memoria ([`service.py`](app/modules/forecast/service.py)). Reabrir la misma comparación no vuelve a llamar a la IA, y si las ofertas cambian la caché se invalida sola.
 
+## Condiciones del proveedor: cuotas y entrega
+
+Cuando le llega una orden, el proveedor pulsa "Revisar y aceptar" y ve tres cosas antes de comprometerse (`GET /api/orders/{id}/evaluation`):
+
+- **¿La constructora paga bien?** Su cumplimiento estimado, con el mismo prior Beta que la predicción: `(recibidas + 3) / (recibidas + canceladas por ella + 4)`. También ve las órdenes recibidas y canceladas, el total comprado, las órdenes con él y los meses en la plataforma. La app no registra pagos, así que se mide por órdenes, y la pantalla lo dice.
+- **Cuántas cuotas darle.** El máximo recomendado ([`credit.py`](app/modules/transactions/credit.py)):
+
+  | Cumplimiento | Cuotas máximas |
+  |---|---|
+  | 85 % o más | 12 |
+  | 70 % o más | 6 |
+  | 55 % o más | 3 |
+  | Menos de 55 % | 1 (contado) |
+
+  - Con poco historial (confianza baja) baja un escalón.
+  - Ninguna cuota puede quedar por debajo de $200.000.
+  - Cada opción (1, 2, 3, 4, 6, 9 o 12 cuotas) sale como *conveniente* (hasta el máximo), *con riesgo* (hasta el escalón siguiente) o *no conveniente*.
+  - La cuota se calcula con amortización francesa y el interés mensual que fija el proveedor.
+  - **Gemini explica** por qué conviene o no ([`credit_narrator.py`](app/modules/transactions/credit_narrator.py)). Las cifras y los veredictos los calcula el código; si la IA falla, se usa una plantilla.
+- **En cuántos días entrega.** Con eso se calcula la fecha prometida.
+
+**Si la constructora debe aprobar:**
+- Si el proveedor deja el pago de contado, como lo pidió la constructora, la orden queda confirmada de una vez.
+- Si ofrece cuotas o cambia la forma de pago, se envía como **propuesta**. La constructora la acepta (`POST /proposal/accept`) o la rechaza (`POST /proposal/reject`). Si la rechaza, el proveedor puede proponer otra.
+- El valor de la cuota lo recalcula siempre el backend.
+
+**Entrega:** la orden muestra la fecha estimada y "Atrasada N días" si se pasa. Al entregar, muestra "Entregada a tiempo" o "con N días de retraso".
+
 ## Principios SOLID, patrones y buenas prácticas
 
 ### SOLID
@@ -118,8 +148,8 @@ Cada "opción" es un plan para comprar el pedido completo. Elegir un proveedor s
 | Patrón | Dónde está | Para qué |
 |---|---|---|
 | Repository | `app/modules/*/repository.py` | Aísla el acceso a datos de las reglas de negocio. |
-| Strategy | `ScoringStrategy` → `ComparativeScoringStrategy`; `ForecastModel` → `StatisticalForecastModel`; `EmailSender` → Resend o consola | Algoritmos de puntaje y de predicción, y formas de enviar correo, intercambiables. |
-| Adapter | [`ai_client.py`](app/infrastructure/ai_client.py), [`matching_engine_client.py`](app/infrastructure/matching_engine_client.py), `AIForecastNarrator`, `ResendEmailSender` ([`email.py`](app/infrastructure/email.py)) | Ocultan las APIs de Gemini y de gRPC detrás de interfaces propias. |
+| Strategy | `ScoringStrategy` → `ComparativeScoringStrategy`; `ForecastModel` → `StatisticalForecastModel`; `EmailSender` → Resend o consola; `CreditNarrator` → IA o plantilla | Algoritmos de puntaje y de predicción, y formas de enviar correo, intercambiables. |
+| Adapter | [`ai_client.py`](app/infrastructure/ai_client.py), [`matching_engine_client.py`](app/infrastructure/matching_engine_client.py), `AIForecastNarrator`, `AICreditNarrator`, `ResendEmailSender` ([`email.py`](app/infrastructure/email.py)) | Ocultan las APIs de Gemini y de gRPC detrás de interfaces propias. |
 | Factory | `get_matching_service`, `get_forecast_service`, `get_order_service` (routers) | Arman cada servicio con sus dependencias concretas. |
 | Facade | [`DashboardService`](app/modules/dashboard/service.py) | Una sola entrada para muchos cálculos del resumen. |
 | Circuit breaker simple / respaldo | `ResilientMatcher`, `AIForecastNarrator` → `TemplateNarrator` | Si el motor gRPC no responde, la comparación se calcula localmente; si Gemini falla, la predicción se explica con plantillas. La app sigue funcionando. |
@@ -169,9 +199,12 @@ FastAPI corre sobre el **event loop de asyncio** (uvloop en Linux): un solo hilo
   - Retraso del event loop.
   - Respaldos locales del motor.
   - Web Vitals.
-- **`GET /api/metrics/summary`** entrega p50, p95 y p99 calculados sobre una ventana en memoria. Requiere sesión.
+- **`GET /api/metrics/summary`** entrega p50, p95 y p99 calculados sobre una ventana en memoria. Solo para el administrador de la app (403 para los demás).
 - **Web Vitals:** el navegador mide LCP, INP, CLS, FCP y TTFB con `useReportWebVitals` y los envía a `POST /api/metrics/web-vitals`.
 - **Pantalla "Rendimiento"** en la app: todo lo anterior en vivo, con los Web Vitals evaluados contra los umbrales de Google (bueno, mejorable o malo).
+  - Solo aparece para el **administrador de ProvCons**, en la sección "Administración" del menú.
+  - No es lo mismo que el rol `admin` de cada empresa, que recibe quien la registra.
+  - El permiso se da solo desde la terminal: `.\.venv\Scripts\python.exe scripts\make_admin.py correo@empresa.com` (con `--quitar` se retira).
 
 ## Patrones de rendering
 
@@ -217,7 +250,7 @@ Con `ENVIRONMENT=development`, la documentación interactiva de la API está en 
 **Recuperación de contraseña:** con `RESEND_API_KEY` se envía un correo real. Sin ella, en desarrollo, el enlace aparece en la terminal del backend. Un administrador también puede restablecerla directamente:
 
 ```powershell
-.\.venv\Scripts\python.exe scriptseset_password.py correo@empresa.com
+.\.venv\Scripts\python.exe scripts\reset_password.py correo@empresa.com
 ```
 
 Detalles y limitaciones de Resend sin dominio propio en [DEPLOY.md](DEPLOY.md#correo-de-recuperación-de-contraseña-resend).

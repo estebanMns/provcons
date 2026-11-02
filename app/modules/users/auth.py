@@ -30,3 +30,9 @@ def require_same_organization(resource_org_id: int, current_user: User) -> None:
     recursos de su propia organización."""
     if current_user.organization_id != resource_org_id:
         raise ForbiddenError("No tienes acceso a recursos de otra organización")
+
+async def require_platform_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Solo el administrador de ProvCons (no el admin de cada empresa)."""
+    if not current_user.is_platform_administrator():
+        raise ForbiddenError("Solo el administrador de la app puede ver esto")
+    return current_user

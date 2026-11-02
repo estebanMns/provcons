@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/Badge";
 import { StatCard } from "@/components/ui/StatCard";
-import { getMetricsSummary } from "@/lib/api";
+import { getMe, getMetricsSummary } from "@/lib/api";
 import type { LatencyStats, MetricsSummary } from "@/lib/api";
 
 const REFRESH_MS = 10_000;
@@ -54,11 +55,28 @@ function LatencyTable({ title, note, rows }: { title: string; note: string; rows
   );
 }
 
+// Solo para el administrador de la app. La protección real es el 403 del
+// backend; aquí solo se evita mostrar una pantalla que no le sirve a nadie más.
 export function Performance() {
+  const router = useRouter();
+  const [allowed, setAllowed] = useState(false);
   const [summary, setSummary] = useState<MetricsSummary | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
+    getMe()
+      .then((me) => {
+        if (cancelled) return;
+        if (me.is_platform_admin) setAllowed(true);
+        else router.replace("/dashboard");
+      })
+      .catch(() => router.replace("/login"));
+    return () => { cancelled = true; };
+  }, [router]);
+
+  useEffect(() => {
+    if (!allowed) return;
     let cancelled = false;
     const load = () => getMetricsSummary()
       .then((s) => { if (!cancelled) { setSummary(s); setError(""); } })
@@ -66,7 +84,9 @@ export function Performance() {
     load();
     const timer = setInterval(load, REFRESH_MS);
     return () => { cancelled = true; clearInterval(timer); };
-  }, []);
+  }, [allowed]);
+
+  if (!allowed) return null;
 
   const lag = summary?.event_loop_lag_ms;
   const grpc = summary?.grpc[0];

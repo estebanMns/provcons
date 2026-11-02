@@ -153,7 +153,7 @@ function RecentOrders({ orders, counterpartLabel, onOpen }: { orders: RecentOrde
                 <tr key={o.id}>
                   <td>#{o.id} <small style={{ color: "var(--muted)" }}>· {formatDate(o.created_at, false)}</small></td>
                   <td>{o.counterpart}</td>
-                  <td><Badge tone={orderStatusFor(o.status, isProvider).tone}>{orderStatusFor(o.status, isProvider).label}</Badge></td>
+                  <td><Badge tone={orderStatusFor(o.status, !!o.has_proposal, isProvider).tone}>{orderStatusFor(o.status, !!o.has_proposal, isProvider).label}</Badge></td>
                   <td style={{ textAlign: "right" }}>{o.total_amount != null ? formatCOP(o.total_amount) : "—"}</td>
                 </tr>
               ))}

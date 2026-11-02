@@ -42,7 +42,8 @@ class DashboardService:
             .limit(RECENT_LIMIT)
         )
         return [
-            {"id": o.id, "counterpart": name, "status": o.status.value, "total_amount": o.total_amount, "created_at": o.created_at}
+            {"id": o.id, "counterpart": name, "status": o.status.value, "has_proposal": bool(o.proposal),
+             "total_amount": o.total_amount, "created_at": o.created_at}
             for o, name in result.all()
         ]
 

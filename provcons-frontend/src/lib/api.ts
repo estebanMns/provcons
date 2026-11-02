@@ -41,6 +41,7 @@ export interface User {
   organization_id: number;
   created_at: string;
   organization?: Organization;
+  is_platform_admin?: boolean;  // administrador de ProvCons: ve Rendimiento
 }
 
 async function fetchAPI<T>(
@@ -366,6 +367,7 @@ export interface RecentOrder {
   id: number;
   counterpart: string;
   status: OrderStatus;
+  has_proposal?: boolean;
   total_amount: number | null;
   created_at: string;
 }
@@ -475,8 +477,58 @@ export interface Order {
   payment_terms: PaymentTerms | null;
   total_amount: number | null;
   items: OrderItem[];
+  installments: number | null;
+  monthly_rate_pct: number | null;
+  installment_amount: number | null;
+  financed_total: number | null;
+  delivery_days: number | null;
+  promised_delivery_at: string | null;
+  delivered_at: string | null;
+  delay_days: number | null;   // días de atraso frente a la fecha prometida (0 = a tiempo)
+  proposal: OrderProposal | null;  // condiciones que la constructora aún no responde
   created_at: string;
   updated_at: string;
+}
+
+export interface OrderProposal {
+  installments: number;
+  monthly_rate_pct: number;
+  installment_amount: number;
+  financed_total: number;
+  delivery_days: number;
+  note: string | null;
+  proposed_at: string;
+}
+
+export interface OrderTerms {
+  delivery_days: number;
+  installments: number;
+  monthly_rate_pct: number;
+  note?: string;
+}
+
+export type InstallmentVerdict = "conveniente" | "con_riesgo" | "no_conveniente";
+
+export interface OrderEvaluation {
+  order_id: number;
+  constructora_name: string | null;
+  amount: number;
+  requested_payment_terms: PaymentTerms | null;
+  score: number;
+  confidence: "baja" | "media" | "alta";
+  max_installments: number;
+  reasons: string[];
+  history: {
+    orders_delivered: number;
+    orders_cancelled_by_client: number;
+    open_orders: number;
+    total_purchased: number;
+    orders_with_you: number;
+    delivered_with_you: number;
+    months_on_platform: number;
+  };
+  options: { installments: number; verdict: InstallmentVerdict }[];
+  narrative: { source: "ia" | "plantilla"; summary: string; advice: string };
 }
 
 // Crea una orden por cada proveedor de las ofertas elegidas
@@ -491,8 +543,22 @@ export async function listOrders(): Promise<Order[]> {
   return fetchAPI<Order[]>("/orders");
 }
 
-export async function confirmOrder(orderId: number): Promise<Order> {
-  return fetchAPI<Order>(`/orders/${orderId}/confirm`, { method: "POST" });
+// Para el proveedor antes de aceptar: cómo cumple la constructora y cuántas cuotas darle
+export async function getOrderEvaluation(orderId: number): Promise<OrderEvaluation> {
+  return fetchAPI<OrderEvaluation>(`/orders/${orderId}/evaluation`);
+}
+
+// De contado se confirma de una vez; con cuotas queda como propuesta para la constructora
+export async function confirmOrder(orderId: number, terms: OrderTerms): Promise<Order> {
+  return fetchAPI<Order>(`/orders/${orderId}/confirm`, { method: "POST", body: JSON.stringify(terms) });
+}
+
+export async function acceptProposal(orderId: number): Promise<Order> {
+  return fetchAPI<Order>(`/orders/${orderId}/proposal/accept`, { method: "POST" });
+}
+
+export async function rejectProposal(orderId: number): Promise<Order> {
+  return fetchAPI<Order>(`/orders/${orderId}/proposal/reject`, { method: "POST" });
 }
 
 export async function advanceOrder(orderId: number): Promise<Order> {

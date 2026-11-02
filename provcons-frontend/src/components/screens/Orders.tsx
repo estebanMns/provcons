@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
-import { advanceOrder, cancelOrder, confirmOrder, getMe, listOrders } from "@/lib/api";
+import { AcceptOrderModal } from "@/components/orders/AcceptOrderModal";
+import { acceptProposal, advanceOrder, cancelOrder, getMe, listOrders, rejectProposal } from "@/lib/api";
 import type { Order, OrderStatus, User } from "@/lib/api";
 import { formatCOP, formatDate } from "@/lib/format";
-import { ORDER_STATUS } from "@/lib/orderStatus";
+import { orderStatusFor } from "@/lib/orderStatus";
 
 const STEPS: { status: OrderStatus; label: string }[] = [
   { status: "pendiente", label: "Creada" },
@@ -28,6 +29,7 @@ export function Orders() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [toCancel, setToCancel] = useState<Order | null>(null);
+  const [toAccept, setToAccept] = useState<Order | null>(null);
 
   useEffect(() => {
     getMe()
@@ -47,12 +49,13 @@ export function Orders() {
 
   const isProvider = user.organization?.type === "proveedor";
 
+  const replace = (updated: Order) => setOrders((list) => (list ?? []).map((o) => (o.id === updated.id ? updated : o)));
+
   const run = async (order: Order, action: (id: number) => Promise<Order>) => {
     setBusyId(order.id);
     setError("");
     try {
-      const updated = await action(order.id);
-      setOrders((list) => (list ?? []).map((o) => (o.id === updated.id ? updated : o)));
+      replace(await action(order.id));
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo actualizar la orden");
     } finally {
@@ -128,11 +131,11 @@ export function Orders() {
                       <p>
                         {o.quotation_title ? `Cotización «${o.quotation_title}» · ` : ""}
                         {formatDate(o.created_at)}
-                        {o.payment_terms ? ` · pago ${o.payment_terms === "contado" ? "de contado" : "a cuotas"}` : ""}
+                        {paymentLabel(o) && ` · ${paymentLabel(o)}`}
                       </p>
                     </div>
                     <div style={{ textAlign: "right" }}>
-                      <Badge tone={ORDER_STATUS[o.status].tone}>{ORDER_STATUS[o.status].label}</Badge>
+                      <Badge tone={orderStatusFor(o.status, !!o.proposal, isProvider).tone}>{orderStatusFor(o.status, !!o.proposal, isProvider).label}</Badge>
                       {o.total_amount != null && <strong style={{ display: "block", fontSize: 16, marginTop: 6 }}>{formatCOP(o.total_amount)}</strong>}
                     </div>
                   </div>
@@ -146,6 +149,17 @@ export function Orders() {
                         </div>
                       ))}
                     </div>
+                  )}
+
+                  <DeliveryInfo order={o} />
+                  {o.status === "pendiente" && o.proposal && (
+                    <ProposalBox
+                      order={o}
+                      isProvider={isProvider}
+                      busy={busy}
+                      onAccept={() => run(o, acceptProposal)}
+                      onReject={() => run(o, rejectProposal)}
+                    />
                   )}
 
                   <div className="table-scroll">
@@ -172,7 +186,7 @@ export function Orders() {
                     order={o}
                     isProvider={isProvider}
                     busy={busy}
-                    onConfirm={() => run(o, confirmOrder)}
+                    onConfirm={() => setToAccept(o)}
                     onAdvance={() => run(o, advanceOrder)}
                     onCancel={() => setToCancel(o)}
                   />
@@ -181,6 +195,14 @@ export function Orders() {
             })}
           </div>
         </>
+      )}
+
+      {toAccept && (
+        <AcceptOrderModal
+          order={toAccept}
+          onClose={() => setToAccept(null)}
+          onDone={(updated) => { replace(updated); setToAccept(null); }}
+        />
       )}
 
       {toCancel && (
@@ -213,8 +235,9 @@ function OrderActions({ order, isProvider, busy, onConfirm, onAdvance, onCancel 
   const canCancel = order.status === "pendiente" || order.status === "confirmada";
   const buttons = [];
 
+  const waitingClient = order.status === "pendiente" && !!order.proposal;
   if (isProvider) {
-    if (order.status === "pendiente") buttons.push(<Button key="confirm" icon="check" onClick={onConfirm} disabled={busy}>Confirmar orden</Button>);
+    if (order.status === "pendiente" && !waitingClient) buttons.push(<Button key="confirm" icon="check" onClick={onConfirm} disabled={busy}>Revisar y aceptar</Button>);
     if (order.status === "confirmada") buttons.push(<Button key="ship" icon="truck" onClick={onAdvance} disabled={busy}>Marcar en tránsito</Button>);
     if (order.status === "en_transito") buttons.push(<Button key="deliver" icon="check" onClick={onAdvance} disabled={busy}>Marcar entregada</Button>);
     if (canCancel) buttons.unshift(<Button key="reject" variant="ghost" onClick={onCancel} disabled={busy}>Rechazar</Button>);
@@ -222,8 +245,10 @@ function OrderActions({ order, isProvider, busy, onConfirm, onAdvance, onCancel 
     buttons.push(<Button key="cancel" variant="ghost" onClick={onCancel} disabled={busy}>Cancelar orden</Button>);
   }
 
-  const hint = isProvider
-    ? { pendiente: "Revisa los materiales y confirma si puedes cumplir.", confirmada: "Cuando despaches el pedido, márcalo en tránsito.", en_transito: "Marca la orden como entregada al llegar a la obra." }[order.status as string]
+  const hint = waitingClient
+    ? (isProvider ? "Esperando que la constructora responda tu propuesta." : "El proveedor propuso condiciones: revísalas arriba.")
+    : isProvider
+    ? { pendiente: "Revisa a la constructora, elige las cuotas y el tiempo de entrega.", confirmada: "Cuando despaches el pedido, márcalo en tránsito.", en_transito: "Marca la orden como entregada al llegar a la obra." }[order.status as string]
     : { pendiente: "Esperando a que el proveedor confirme.", confirmada: "El proveedor confirmó; pronto despachará.", en_transito: "El pedido va en camino." }[order.status as string];
 
   if (!buttons.length && !hint) return null;
@@ -231,6 +256,58 @@ function OrderActions({ order, isProvider, busy, onConfirm, onAdvance, onCancel 
     <div className="card-actions">
       <small style={{ color: "var(--muted)" }}>{hint ?? ""}</small>
       <div>{buttons}</div>
+    </div>
+  );
+}
+
+function paymentLabel(o: Order) {
+  if (o.installments != null && o.installment_amount != null) {
+    if (o.installments === 1) return "pago de contado";
+    const rate = o.monthly_rate_pct ? ` (${o.monthly_rate_pct.toLocaleString("es-CO")} % mensual)` : " (sin interés)";
+    return `${o.installments} cuotas de ${formatCOP(o.installment_amount)}${rate}`;
+  }
+  if (!o.payment_terms) return "";
+  return `pidió pago ${o.payment_terms === "contado" ? "de contado" : "a cuotas"}`;
+}
+
+// Fecha prometida y si va (o llegó) a tiempo
+function DeliveryInfo({ order }: { order: Order }) {
+  if (!order.promised_delivery_at || order.status === "cancelada") return null;
+  const late = order.delay_days ?? 0;
+  const delivered = order.status === "entregada";
+  let badge: { tone: "success" | "warning" | "danger" | "info"; text: string };
+  if (delivered) badge = late > 0 ? { tone: "warning", text: `Entregada con ${late} día(s) de retraso` } : { tone: "success", text: "Entregada a tiempo" };
+  else badge = late > 0 ? { tone: "danger", text: `Atrasada ${late} día(s)` } : { tone: "info", text: "A tiempo" };
+  return (
+    <div className="delivery-info">
+      <Icon name="truck" size={15} />
+      <span>Entrega {delivered ? "prometida" : "estimada"}: <strong>{formatDate(order.promised_delivery_at)}</strong> ({order.delivery_days} día(s))</span>
+      <Badge tone={badge.tone}>{badge.text}</Badge>
+    </div>
+  );
+}
+
+// Condiciones que propuso el proveedor y la constructora aún no responde
+function ProposalBox({ order, isProvider, busy, onAccept, onReject }: {
+  order: Order; isProvider: boolean; busy: boolean; onAccept: () => void; onReject: () => void;
+}) {
+  const p = order.proposal!;
+  return (
+    <div className="proposal-box">
+      <div>
+        <span className="forecast-label">{isProvider ? "TU PROPUESTA" : "PROPUESTA DEL PROVEEDOR"}</span>
+        <p>
+          {p.installments === 1 ? <>Pago <strong>de contado</strong></> : <><strong>{p.installments} cuotas de {formatCOP(p.installment_amount)}</strong> ({p.monthly_rate_pct ? `${p.monthly_rate_pct.toLocaleString("es-CO")} % mensual` : "sin interés"}) · total {formatCOP(p.financed_total)}</>}
+          {" "}· entrega en <strong>{p.delivery_days} día(s)</strong>
+        </p>
+        {p.note && <p className="proposal-note">&ldquo;{p.note}&rdquo;</p>}
+      </div>
+      {!isProvider && (
+        <div className="proposal-actions">
+          <Button variant="ghost" onClick={onReject} disabled={busy}>Rechazar</Button>
+          <Button icon="check" onClick={onAccept} disabled={busy}>Aceptar condiciones</Button>
+        </div>
+      )}
     </div>
   );
 }

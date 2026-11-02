@@ -27,11 +27,13 @@ export function Sidebar({ mobileOpen, closeMobile }: SidebarProps) {
       });
   }, [router]);
 
-  // Filtrar items según el rol
+  // Filtrar items según el rol. Rendimiento es solo del administrador de la app.
   const isProvider = user?.organization?.type === "proveedor";
+  const isPlatformAdmin = !!user?.is_platform_admin;
   const filteredItems = isProvider
-    ? navItems.filter((item) => ["dashboard", "inventario", "ordenes", "auditoria", "rendimiento"].includes(item.id))
-    : navItems.filter((item) => ["dashboard", "cotizaciones", "ordenes", "auditoria", "rendimiento"].includes(item.id));
+    ? navItems.filter((item) => ["dashboard", "inventario", "ordenes", "auditoria"].includes(item.id))
+    : navItems.filter((item) => ["dashboard", "cotizaciones", "ordenes", "auditoria"].includes(item.id));
+  const adminItems = isPlatformAdmin ? navItems.filter((item) => item.id === "rendimiento") : [];
 
   const handleLogoutClick = () => {
     setShowLogoutModal(true);
@@ -56,6 +58,16 @@ export function Sidebar({ mobileOpen, closeMobile }: SidebarProps) {
             <Icon name={item.icon} /><span>{item.label}</span>
           </button>
         ))}
+        {adminItems.length > 0 && <p className="side-nav-section">Administración</p>}
+        {adminItems.map((item) => (
+          <button
+            key={item.id}
+            className={pathname === viewPaths[item.id] ? "active" : ""}
+            onClick={() => { router.push(viewPaths[item.id]); closeMobile(); }}
+          >
+            <Icon name={item.icon} /><span>{item.label}</span>
+          </button>
+        ))}
       </nav>
       <div className="side-help">
         <span className="help-icon"><Icon name="spark" size={18} /></span>
@@ -69,7 +81,7 @@ export function Sidebar({ mobileOpen, closeMobile }: SidebarProps) {
       </div>
       <button className="user-card" onClick={handleLogoutClick} aria-label="Cerrar sesión">
         <span className="avatar">{user?.full_name?.slice(0, 2).toUpperCase() || "U"}</span>
-        <div><strong>{user?.full_name || "Usuario"}</strong><small>{user?.organization?.type === "proveedor" ? "Proveedor" : "Constructora"}</small></div>
+        <div><strong>{user?.full_name || "Usuario"}</strong><small>{isPlatformAdmin ? "Administrador · " : ""}{user?.organization?.type === "proveedor" ? "Proveedor" : "Constructora"}</small></div>
         <Icon name="chevron" size={16} />
       </button>
 

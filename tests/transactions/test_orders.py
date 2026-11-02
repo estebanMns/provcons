@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from itertools import count
 
 import pytest
@@ -7,6 +7,7 @@ import pytest
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError, ValidationError
 from app.modules.documents_ai.models import ProviderInventoryItem
 from app.modules.matching.models import Match, Quotation, QuotationItem, QuotationStatus
+from app.modules.transactions.credit import ClientHistory
 from app.modules.transactions.models import Order, OrderStatus, PaymentTerms
 from app.modules.transactions.service import OrderService
 
@@ -59,6 +60,9 @@ class FakeOrderRepo:
     async def get_quotation_titles(self, ids):
         return {i: "Obra" for i in ids}
 
+    async def client_history(self, constructora_org_id, provider_org_id, exclude_order_id=None):
+        return ClientHistory(delivered=8, cancelled_by_client=0, months_on_platform=6)
+
 
 class FakeAudit:
     def __init__(self):
@@ -91,8 +95,8 @@ def setup():
     return OrderService(repo, audit), repo, audit, quotation, ids
 
 
-def _create(service, match_ids, org=CONSTRUCTORA):
-    return asyncio.run(service.create_orders(1, match_ids, PaymentTerms.contado, actor_user_id=1, actor_org_id=org))
+def _create(service, match_ids, org=CONSTRUCTORA, terms=PaymentTerms.contado):
+    return asyncio.run(service.create_orders(1, match_ids, terms, actor_user_id=1, actor_org_id=org))
 
 
 def test_una_orden_por_proveedor_con_precios_congelados(setup):
@@ -139,13 +143,13 @@ def test_flujo_del_proveedor_y_permisos(setup):
     run = asyncio.run
 
     with pytest.raises(ForbiddenError):
-        run(service.confirm_order(order_id, 1, CONSTRUCTORA))  # confirma el proveedor, no la constructora
+        run(service.confirm_order(order_id, 1, CONSTRUCTORA, delivery_days=5))  # confirma el proveedor, no la constructora
     with pytest.raises(ForbiddenError):
         run(service.get_order(order_id, ARGOS))  # otro proveedor no la ve
     with pytest.raises(ConflictError):
         run(service.advance_order(order_id, 2, VALLE))  # no puede enviarse sin confirmar
 
-    assert run(service.confirm_order(order_id, 2, VALLE))["status"] == OrderStatus.confirmada
+    assert run(service.confirm_order(order_id, 2, VALLE, delivery_days=5))["status"] == OrderStatus.confirmada
     assert run(service.advance_order(order_id, 2, VALLE))["status"] == OrderStatus.en_transito
     assert run(service.advance_order(order_id, 2, VALLE))["status"] == OrderStatus.entregada
     with pytest.raises(ConflictError):
@@ -164,10 +168,102 @@ def test_transiciones_del_modelo():
     order = Order(status=OrderStatus.pendiente, predicted_negotiation={})
     with pytest.raises(ValueError):
         order.advance()
-    order.confirm()
+    order.confirm_directly(_terms(), NOW)
     assert order.status == OrderStatus.confirmada and order.can_be_cancelled()
     order.advance()
     order.advance()
     assert order.status == OrderStatus.entregada and not order.can_be_cancelled()
     with pytest.raises(ValueError):
         order.advance()
+
+
+NOW = datetime(2026, 11, 1, 12, tzinfo=timezone.utc)
+
+
+def _terms(installments=1, days=5):
+    return {"installments": installments, "monthly_rate_pct": 0.0, "installment_amount": 100.0,
+            "financed_total": 100.0, "delivery_days": days, "note": None}
+
+
+def test_de_contado_se_confirma_directo_con_fecha_prometida(setup):
+    service, repo, audit, _, ids = setup
+    order_id = _create(service, [ids["varilla_valle"]])[0]["id"]
+    out = asyncio.run(service.confirm_order(order_id, 2, VALLE, delivery_days=7, now=NOW))
+    assert out["status"] == OrderStatus.confirmada and out["proposal"] is None
+    assert out["installments"] == 1 and out["installment_amount"] == 50 * 18500
+    assert out["promised_delivery_at"] == NOW + timedelta(days=7)
+    assert "order.confirmed" in audit.actions
+
+
+def test_con_cuotas_queda_como_propuesta_hasta_que_la_constructora_acepte(setup):
+    service, repo, audit, _, ids = setup
+    order_id = _create(service, [ids["varilla_valle"]])[0]["id"]
+    run = asyncio.run
+
+    out = run(service.confirm_order(order_id, 2, VALLE, delivery_days=10, installments=6,
+                                    monthly_rate_pct=1.5, note="  primera cuota al despachar ", now=NOW))
+    assert out["status"] == OrderStatus.pendiente
+    proposal = out["proposal"]
+    assert proposal["installments"] == 6 and proposal["note"] == "primera cuota al despachar"
+    assert proposal["financed_total"] > 50 * 18500  # con interés
+    assert "order.proposed" in audit.actions
+
+    with pytest.raises(ConflictError):  # no puede proponer dos veces sin respuesta
+        run(service.confirm_order(order_id, 2, VALLE, delivery_days=3))
+    with pytest.raises(ForbiddenError):  # la propuesta la responde la constructora
+        run(service.respond_proposal(order_id, 2, VALLE, accept=True))
+
+    out = run(service.respond_proposal(order_id, 1, CONSTRUCTORA, accept=True, now=NOW))
+    assert out["status"] == OrderStatus.confirmada and out["proposal"] is None
+    assert out["installments"] == 6 and out["monthly_rate_pct"] == 1.5
+    assert out["promised_delivery_at"] == NOW + timedelta(days=10)
+    assert "order.proposal_accepted" in audit.actions
+
+
+def test_si_la_constructora_rechaza_el_proveedor_puede_proponer_otra_vez(setup):
+    service, repo, audit, _, ids = setup
+    order_id = _create(service, [ids["varilla_valle"]], terms=PaymentTerms.cuotas)[0]["id"]
+    run = asyncio.run
+    # Pidió cuotas: aun de contado es un cambio de condiciones
+    assert run(service.confirm_order(order_id, 2, VALLE, delivery_days=4))["proposal"] is not None
+    out = run(service.respond_proposal(order_id, 1, CONSTRUCTORA, accept=False))
+    assert out["status"] == OrderStatus.pendiente and out["proposal"] is None
+    assert "order.proposal_rejected" in audit.actions
+    assert run(service.confirm_order(order_id, 2, VALLE, delivery_days=4, installments=3))["proposal"]["installments"] == 3
+    run(service.respond_proposal(order_id, 1, CONSTRUCTORA, accept=False))
+    with pytest.raises(ConflictError):  # ya no hay propuesta que responder
+        run(service.respond_proposal(order_id, 1, CONSTRUCTORA, accept=False))
+
+
+def test_no_se_acepta_una_orden_ya_confirmada(setup):
+    service, *_, ids = setup
+    order_id = _create(service, [ids["varilla_valle"]])[0]["id"]
+    asyncio.run(service.confirm_order(order_id, 2, VALLE, delivery_days=5))
+    with pytest.raises(ConflictError):
+        asyncio.run(service.confirm_order(order_id, 2, VALLE, delivery_days=5, installments=3))
+
+
+def test_atraso_frente_a_la_fecha_prometida():
+    order = Order(status=OrderStatus.pendiente, predicted_negotiation={})
+    order.confirm_directly(_terms(days=5), NOW)
+    assert order.delay_days(NOW + timedelta(days=4)) == 0
+    assert order.delay_days(NOW + timedelta(days=8, hours=2)) == 3
+    order.advance(NOW + timedelta(days=6))
+    order.advance(NOW + timedelta(days=7, hours=1))
+    assert order.delivered_at == NOW + timedelta(days=7, hours=1)
+    assert order.delay_days(NOW + timedelta(days=30)) == 2  # se mide hasta la entrega
+
+
+def test_la_evaluacion_solo_la_ve_el_proveedor_y_antes_de_aceptar(setup):
+    service, *_, ids = setup
+    order_id = _create(service, [ids["varilla_valle"]])[0]["id"]
+    run = asyncio.run
+    with pytest.raises(ForbiddenError):
+        run(service.evaluate_order(order_id, CONSTRUCTORA))
+    evaluation = run(service.evaluate_order(order_id, VALLE))
+    assert evaluation["constructora_name"] == f"Org {CONSTRUCTORA}"
+    assert evaluation["max_installments"] == 4  # buen historial, tope por monto: 925.000 / 200.000
+    assert evaluation["narrative"]["source"] == "plantilla"
+    run(service.confirm_order(order_id, 2, VALLE, delivery_days=5))
+    with pytest.raises(ConflictError):
+        run(service.evaluate_order(order_id, VALLE))

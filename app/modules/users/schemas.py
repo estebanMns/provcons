@@ -65,6 +65,7 @@ class MeOut(UserOut):
     """Usuario + su organización: el frontend necesita el tipo de
     organización para decidir si muestra la vista de proveedor o constructora."""
     organization: OrganizationOut
+    is_platform_admin: bool = False  # ve la pestaña Rendimiento
 
 
 class TokenResponse(BaseModel):

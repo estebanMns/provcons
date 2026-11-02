@@ -94,6 +94,16 @@ Mientras no hagas esto, el backend arranca pero falla en cualquier consulta (tim
 
 Pide la nueva contraseña dos veces sin mostrarla y queda registrada en el historial de actividad.
 
+## Administrador de la app
+
+La pantalla "Rendimiento" solo la ve el administrador de ProvCons. Para dártelo, desde tu computador, con el `.env` apuntando a la base:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\make_admin.py tu-correo@empresa.com
+```
+
+Vuelve a cargar la página y aparece la sección "Administración". Para quitarlo, agrega `--quitar`. No se puede dar desde la web.
+
 ## Migraciones de base de datos
 
 Render no corre migraciones automáticamente en el plan gratuito. Cuando haya una migración nueva, córrela desde tu computador, con el `.env` apuntando a RDS:
