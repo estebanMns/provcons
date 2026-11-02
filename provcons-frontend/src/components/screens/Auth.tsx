@@ -9,16 +9,16 @@ import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { Excavator3D } from "@/components/auth/Excavator3D";
 import { signup, login, setToken, getMe, requestPasswordReset } from "@/lib/api";
+import type { SignupPayload } from "@/lib/api";
 import type { IconName } from "@/lib/types";
 
 type Step = "login" | "register" | "forgot" | "ready";
 
-// Las dos tarjetas del registro (diseño de Figma). El formulario se llena
-// dentro de la que el cliente elige.
-const PLANS: { role: Role; tag: string; title: string; chip: string; icon: IconName; headline: string; sub: string; features: string[] }[] = [
+// Las dos tarjetas del registro (diseño de Figma). Cada una trae su propio
+// formulario: quien llena la de proveedor se registra como proveedor.
+const PLANS: { role: Role; tag: string; title: string; chip: string; icon: IconName; features: string[] }[] = [
   {
     role: "constructora", tag: "PARA COMPRAR", title: "Constructora", chip: "Compras de materiales", icon: "building",
-    headline: "Busco materiales", sub: "y el mejor proveedor",
     features: [
       "Sube tu lista en PDF, Excel o una foto tomada en obra",
       "Compara proveedores por precio, stock y cobertura",
@@ -28,7 +28,6 @@ const PLANS: { role: Role; tag: string; title: string; chip: string; icon: IconN
   },
   {
     role: "proveedor", tag: "PARA VENDER", title: "Proveedor", chip: "Ventas e inventario", icon: "box",
-    headline: "Vendo materiales", sub: "a constructoras",
     features: [
       "Sube tu catálogo y aparece en las comparaciones",
       "Antes de aceptar, ve si la constructora cumple",
@@ -55,11 +54,8 @@ export function Auth() {
   const [loginPassword, setLoginPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  const [signupOrgName, setSignupOrgName] = useState("");
-  const [signupTaxId, setSignupTaxId] = useState("");
-  const [signupFullName, setSignupFullName] = useState("");
-  const [signupEmail, setSignupEmail] = useState("");
-  const [signupPassword, setSignupPassword] = useState("");
+  const [signupRole, setSignupRole] = useState<Role | null>(null);  // tarjeta que se está enviando
+  const [signupError, setSignupError] = useState<{ role: Role; message: string } | null>(null);
 
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotMessage, setForgotMessage] = useState("");
@@ -88,28 +84,21 @@ export function Auth() {
     }
   };
 
-  const handleSignup = async () => {
-    setError("");
-    if (!authRole) return;
-    setLoading(true);
+  // Cada tarjeta envía sus propios datos: la organización queda del tipo de la tarjeta
+  const handleSignup = async (data: Omit<SignupPayload, "organization_type">, role: Role) => {
+    setSignupError(null);
+    setSignupRole(role);
     try {
-      await signup({
-        organization_name: signupOrgName,
-        organization_type: authRole,
-        tax_id: signupTaxId,
-        full_name: signupFullName,
-        email: signupEmail,
-        password: signupPassword,
-      });
+      await signup({ ...data, organization_type: role });
       // Se inicia sesión de una vez: los botones de la pantalla de bienvenida
       // llevan a páginas protegidas.
-      setToken(await login({ email: signupEmail, password: signupPassword }));
+      setToken(await login({ email: data.email, password: data.password }));
+      setAuthRole(role);
       setStep("ready");
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Error al crear la organización";
-      setError(message);
+      setSignupError({ role, message: err instanceof Error ? err.message : "Error al crear la organización" });
     } finally {
-      setLoading(false);
+      setSignupRole(null);
     }
   };
 
@@ -129,7 +118,7 @@ export function Auth() {
     }
   };
 
-  const goTo = (next: Step) => { setStep(next); setError(""); setForgotMessage(""); };
+  const goTo = (next: Step) => { setStep(next); setError(""); setForgotMessage(""); setSignupError(null); };
 
   const heading = {
     login: { eyebrow: "ACCESO SEGURO", title: "Bienvenido de nuevo", text: "Ingresa con tu correo corporativo." },
@@ -179,36 +168,18 @@ export function Auth() {
             <button className="auth-back" onClick={() => goTo("login")}><Icon name="arrow" size={16} /> Volver</button>
             <p className="eyebrow">CREAR ORGANIZACIÓN</p>
             <h2>¿Cómo usarás ProvCons?</h2>
-            <p>Elige una tarjeta y completa los datos de tu empresa en ella.</p>
-            {error && <div className="register-error" role="alert">{error}</div>}
+            <p>Llena la tarjeta que corresponde a tu empresa y regístrate.</p>
             <div className="plan-grid">
-              {PLANS.map((plan) => {
-                const selected = authRole === plan.role;
-                return (
-                  <article key={plan.role} className={`plan-card${selected ? " selected" : ""}`}>
-                    <p className="plan-tag">{selected ? "TU ELECCIÓN" : plan.tag}</p>
-                    <h3>{plan.title}</h3>
-                    <span className="plan-chip"><Icon name={plan.icon} size={14} /> {plan.chip}</span>
-                    <p className="plan-headline">{plan.headline}<small>{plan.sub}</small></p>
-                    {selected ? (
-                      <div className="plan-form">
-                        <label>Nombre de la organización<input placeholder="Ej. Materiales del Norte S.A.S." value={signupOrgName} onChange={(e) => setSignupOrgName(e.target.value)} disabled={loading} autoFocus /></label>
-                        <label>NIT<input placeholder="900.123.456-7" value={signupTaxId} onChange={(e) => setSignupTaxId(e.target.value)} disabled={loading} /></label>
-                        <label>Tu nombre completo<input placeholder="Ej. Juan Pérez" value={signupFullName} onChange={(e) => setSignupFullName(e.target.value)} disabled={loading} /></label>
-                        <label>Tu correo de trabajo<input type="email" placeholder="nombre@empresa.com" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)} disabled={loading} /></label>
-                        <label>Contraseña<input type="password" placeholder="Mínimo 8 caracteres" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSignup()} disabled={loading} /></label>
-                        <button className="plan-button" onClick={handleSignup} disabled={loading}>{loading ? "Creando..." : "Crear organización y continuar"}</button>
-                      </div>
-                    ) : (
-                      <button className="plan-button" onClick={() => { setAuthRole(plan.role); setError(""); }} disabled={loading}>Elegir {plan.title}</button>
-                    )}
-                    <p className="plan-section"><Icon name="spark" size={18} /> Con IA de ProvCons</p>
-                    <ul className="plan-features">
-                      {plan.features.map((f) => <li key={f}><Icon name="check" size={16} /> {f}</li>)}
-                    </ul>
-                  </article>
-                );
-              })}
+              {PLANS.map((plan) => (
+                <RegisterCard
+                  key={plan.role}
+                  plan={plan}
+                  sending={signupRole === plan.role}
+                  disabled={signupRole !== null}
+                  error={signupError?.role === plan.role ? signupError.message : ""}
+                  onSubmit={(data) => handleSignup(data, plan.role)}
+                />
+              ))}
             </div>
             <small className="legal">Al continuar aceptas los términos de servicio y la política de privacidad.</small>
           </div>
@@ -279,5 +250,73 @@ function AuthStory({ withExcavator = false }: { withExcavator?: boolean }) {
       </div>
       <small>ProvCons · Plataforma B2B para el sector construcción</small>
     </aside>
+  );
+}
+
+type Plan = (typeof PLANS)[number];
+
+const EMPTY_FORM = { organization_name: "", full_name: "", tax_id: "", email: "", confirm_email: "", password: "", confirm_password: "" };
+type FormField = keyof typeof EMPTY_FORM;
+
+// Casillas del Figma: el nombre del campo va escrito dentro de cada una
+const FIELDS: { name: FormField; placeholder: string; type?: string; autoComplete?: string }[] = [
+  { name: "organization_name", placeholder: "Nombre de la empresa", autoComplete: "organization" },
+  { name: "full_name", placeholder: "Tu nombre completo", autoComplete: "name" },
+  { name: "tax_id", placeholder: "NIT" },
+  { name: "email", placeholder: "Correo", type: "email", autoComplete: "email" },
+  { name: "confirm_email", placeholder: "Confirmar correo", type: "email", autoComplete: "off" },
+  { name: "password", placeholder: "Contraseña", type: "password", autoComplete: "new-password" },
+  { name: "confirm_password", placeholder: "Confirmar contraseña", type: "password", autoComplete: "new-password" },
+];
+
+// Una tarjeta del registro con su propio formulario y botón
+function RegisterCard({ plan, sending, disabled, error, onSubmit }: {
+  plan: Plan; sending: boolean; disabled: boolean; error: string;
+  onSubmit: (data: Omit<SignupPayload, "organization_type">) => void;
+}) {
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [check, setCheck] = useState("");
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const empty = FIELDS.find((f) => !form[f.name].trim());
+    if (empty) return setCheck(`Completa: ${empty.placeholder}.`);
+    if (form.email.trim().toLowerCase() !== form.confirm_email.trim().toLowerCase()) return setCheck("Los correos no coinciden.");
+    if (form.password.length < 8) return setCheck("La contraseña debe tener al menos 8 caracteres.");
+    if (form.password !== form.confirm_password) return setCheck("Las contraseñas no coinciden.");
+    setCheck("");
+    onSubmit({
+      organization_name: form.organization_name.trim(), full_name: form.full_name.trim(),
+      tax_id: form.tax_id.trim(), email: form.email.trim(), password: form.password,
+    });
+  };
+
+  const message = check || error;
+  return (
+    <form className="plan-card" onSubmit={submit} noValidate aria-label={`Registro de ${plan.title}`}>
+      <p className="plan-tag">{plan.tag}</p>
+      <h3>{plan.title}</h3>
+      <span className="plan-chip"><Icon name={plan.icon} size={14} /> {plan.chip}</span>
+      <div className="plan-fields">
+        {FIELDS.map((f) => (
+          <input
+            key={f.name}
+            type={f.type ?? "text"}
+            placeholder={f.placeholder}
+            aria-label={f.placeholder}
+            autoComplete={f.autoComplete}
+            value={form[f.name]}
+            onChange={(e) => setForm((v) => ({ ...v, [f.name]: e.target.value }))}
+            disabled={disabled}
+          />
+        ))}
+      </div>
+      {message && <p className="plan-error" role="alert">{message}</p>}
+      <button type="submit" className="plan-button" disabled={disabled}>{sending ? "Registrando..." : `Registrarme como ${plan.title.toLowerCase()}`}</button>
+      <p className="plan-section"><Icon name="spark" size={18} /> Con IA de ProvCons</p>
+      <ul className="plan-features">
+        {plan.features.map((feature) => <li key={feature}><Icon name="check" size={16} /> {feature}</li>)}
+      </ul>
+    </form>
   );
 }
