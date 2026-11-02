@@ -7,9 +7,36 @@ import type { Role } from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
+import { Excavator3D } from "@/components/auth/Excavator3D";
 import { signup, login, setToken, getMe, requestPasswordReset } from "@/lib/api";
+import type { IconName } from "@/lib/types";
 
 type Step = "login" | "register" | "forgot" | "ready";
+
+// Las dos tarjetas del registro (diseño de Figma). El formulario se llena
+// dentro de la que el cliente elige.
+const PLANS: { role: Role; tag: string; title: string; chip: string; icon: IconName; headline: string; sub: string; features: string[] }[] = [
+  {
+    role: "constructora", tag: "PARA COMPRAR", title: "Constructora", chip: "Compras de materiales", icon: "building",
+    headline: "Busco materiales", sub: "y el mejor proveedor",
+    features: [
+      "Sube tu lista en PDF, Excel o una foto tomada en obra",
+      "Compara proveedores por precio, stock y cobertura",
+      "La IA predice qué pasará con cada opción de compra",
+      "Crea órdenes y sigue cada entrega",
+    ],
+  },
+  {
+    role: "proveedor", tag: "PARA VENDER", title: "Proveedor", chip: "Ventas e inventario", icon: "box",
+    headline: "Vendo materiales", sub: "a constructoras",
+    features: [
+      "Sube tu catálogo y aparece en las comparaciones",
+      "Antes de aceptar, ve si la constructora cumple",
+      "Propón cuotas y el tiempo de entrega",
+      "Despacha y marca cada orden entregada",
+    ],
+  },
+];
 
 export function Brand() {
   return <div className="brand"><span className="brand-mark"><span /></span><span>ProvCons</span></div>;
@@ -20,7 +47,7 @@ export function Auth() {
   const { setRole } = useRole();
   // /login?registro=1 abre directamente el registro (enlaces de la página principal)
   const [step, setStep] = useState<Step>(useSearchParams().get("registro") ? "register" : "login");
-  const [authRole, setAuthRole] = useState<Role>("proveedor");
+  const [authRole, setAuthRole] = useState<Role | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
 
@@ -63,6 +90,7 @@ export function Auth() {
 
   const handleSignup = async () => {
     setError("");
+    if (!authRole) return;
     setLoading(true);
     try {
       await signup({
@@ -109,7 +137,7 @@ export function Auth() {
     forgot: { eyebrow: "RECUPERAR ACCESO", title: "¿Olvidaste tu contraseña?", text: "Escribe tu correo y te enviaremos un enlace para crear una nueva. El enlace vence en 30 minutos." },
   }[step === "ready" ? "login" : step];
 
-  if (step === "ready") {
+  if (step === "ready" && authRole) {
     return (
       <div className="auth-shell">
         <aside className="auth-story">
@@ -142,24 +170,59 @@ export function Auth() {
     );
   }
 
+  if (step === "register") {
+    return (
+      <div className="auth-shell">
+        <AuthStory withExcavator />
+        <main className="auth-main">
+          <div className="register-panel">
+            <button className="auth-back" onClick={() => goTo("login")}><Icon name="arrow" size={16} /> Volver</button>
+            <p className="eyebrow">CREAR ORGANIZACIÓN</p>
+            <h2>¿Cómo usarás ProvCons?</h2>
+            <p>Elige una tarjeta y completa los datos de tu empresa en ella.</p>
+            {error && <div className="register-error" role="alert">{error}</div>}
+            <div className="plan-grid">
+              {PLANS.map((plan) => {
+                const selected = authRole === plan.role;
+                return (
+                  <article key={plan.role} className={`plan-card${selected ? " selected" : ""}`}>
+                    <p className="plan-tag">{selected ? "TU ELECCIÓN" : plan.tag}</p>
+                    <h3>{plan.title}</h3>
+                    <span className="plan-chip"><Icon name={plan.icon} size={14} /> {plan.chip}</span>
+                    <p className="plan-headline">{plan.headline}<small>{plan.sub}</small></p>
+                    {selected ? (
+                      <div className="plan-form">
+                        <label>Nombre de la organización<input placeholder="Ej. Materiales del Norte S.A.S." value={signupOrgName} onChange={(e) => setSignupOrgName(e.target.value)} disabled={loading} autoFocus /></label>
+                        <label>NIT<input placeholder="900.123.456-7" value={signupTaxId} onChange={(e) => setSignupTaxId(e.target.value)} disabled={loading} /></label>
+                        <label>Tu nombre completo<input placeholder="Ej. Juan Pérez" value={signupFullName} onChange={(e) => setSignupFullName(e.target.value)} disabled={loading} /></label>
+                        <label>Tu correo de trabajo<input type="email" placeholder="nombre@empresa.com" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)} disabled={loading} /></label>
+                        <label>Contraseña<input type="password" placeholder="Mínimo 8 caracteres" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSignup()} disabled={loading} /></label>
+                        <button className="plan-button" onClick={handleSignup} disabled={loading}>{loading ? "Creando..." : "Crear organización y continuar"}</button>
+                      </div>
+                    ) : (
+                      <button className="plan-button" onClick={() => { setAuthRole(plan.role); setError(""); }} disabled={loading}>Elegir {plan.title}</button>
+                    )}
+                    <p className="plan-section"><Icon name="spark" size={18} /> Con IA de ProvCons</p>
+                    <ul className="plan-features">
+                      {plan.features.map((f) => <li key={f}><Icon name="check" size={16} /> {f}</li>)}
+                    </ul>
+                  </article>
+                );
+              })}
+            </div>
+            <small className="legal">Al continuar aceptas los términos de servicio y la política de privacidad.</small>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="auth-shell">
-      <aside className="auth-story">
-        <Brand />
-        <div className="auth-story-content">
-          <p className="eyebrow">COMPRAS Y VENTAS, SIN SUPOSICIONES</p>
-          <h1>Construye acuerdos con más confianza.</h1>
-          <p>Compara oportunidades, entiende cada recomendación y toma mejores decisiones con información clara.</p>
-          <div className="auth-proof">
-            <span><Icon name="shield" /></span>
-            <div><strong>IA explicable y segura</strong><p>Siempre sabrás por qué recomendamos una opción.</p></div>
-          </div>
-        </div>
-        <small>ProvCons · Plataforma B2B para el sector construcción</small>
-      </aside>
+      <AuthStory />
       <main className="auth-main">
         <div className="auth-card">
-          {step !== "login" && (
+          {step === "forgot" && (
             <button className="auth-back" onClick={() => goTo("login")}>
               <Icon name="arrow" size={16} /> Volver
             </button>
@@ -180,7 +243,7 @@ export function Auth() {
                 <Button wide onClick={handleForgot} disabled={loading}>{loading ? "Enviando..." : "Enviarme el enlace"}</Button>
               </>
             )
-          ) : step === "login" ? (
+          ) : (
             <>
               <label>Correo corporativo<input type="email" placeholder="nombre@empresa.com" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} disabled={loading} /></label>
               <label>Contraseña<div className="password-field"><input type={showPassword ? "text" : "password"} value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleLogin()} disabled={loading} /><button type="button" onClick={() => setShowPassword((v) => !v)}>{showPassword ? "Ocultar" : "Mostrar"}</button></div></label>
@@ -192,26 +255,29 @@ export function Auth() {
               <div className="auth-divider"><span /> o <span /></div>
               <button className="create-account" onClick={() => goTo("register")} disabled={loading}>Crear una organización nueva <Icon name="arrow" size={15} /></button>
             </>
-          ) : (
-            <>
-              <label>Nombre de la organización<input placeholder="Ej. Materiales del Norte S.A.S." value={signupOrgName} onChange={(e) => setSignupOrgName(e.target.value)} disabled={loading} /></label>
-              <label>NIT<input placeholder="900.123.456-7" value={signupTaxId} onChange={(e) => setSignupTaxId(e.target.value)} disabled={loading} /></label>
-              <fieldset>
-                <legend>¿Qué tipo de organización eres?</legend>
-                <div className="role-options">
-                  <button className={authRole === "constructora" ? "selected" : ""} onClick={() => setAuthRole("constructora")} disabled={loading} type="button"><Icon name="building" /><span><strong>Constructora</strong><small>Busco materiales y proveedores</small></span></button>
-                  <button className={authRole === "proveedor" ? "selected" : ""} onClick={() => setAuthRole("proveedor")} disabled={loading} type="button"><Icon name="box" /><span><strong>Proveedor</strong><small>Ofrezco materiales e inventario</small></span></button>
-                </div>
-              </fieldset>
-              <label>Tu nombre completo<input placeholder="Ej. Juan Pérez" value={signupFullName} onChange={(e) => setSignupFullName(e.target.value)} disabled={loading} /></label>
-              <label>Tu correo de trabajo<input type="email" placeholder="nombre@empresa.com" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)} disabled={loading} /></label>
-              <label>Contraseña<input type="password" placeholder="Mínimo 8 caracteres" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} disabled={loading} /></label>
-              <Button wide icon="arrow" onClick={handleSignup} disabled={loading}>{loading ? "Creando..." : "Crear organización y continuar"}</Button>
-              <small className="legal">Al continuar aceptas los términos de servicio y la política de privacidad.</small>
-            </>
           )}
         </div>
       </main>
     </div>
+  );
+}
+
+// Panel izquierdo de ingreso y registro. En el registro muestra la excavadora en 3D.
+function AuthStory({ withExcavator = false }: { withExcavator?: boolean }) {
+  return (
+    <aside className="auth-story">
+      <Brand />
+      <div className="auth-story-content">
+        <p className="eyebrow">COMPRAS Y VENTAS, SIN SUPOSICIONES</p>
+        <h1>Construye acuerdos con más confianza.</h1>
+        <p>Compara oportunidades, entiende cada recomendación y toma mejores decisiones con información clara.</p>
+        {withExcavator && <Excavator3D />}
+        <div className="auth-proof">
+          <span><Icon name="shield" /></span>
+          <div><strong>IA explicable y segura</strong><p>Siempre sabrás por qué recomendamos una opción.</p></div>
+        </div>
+      </div>
+      <small>ProvCons · Plataforma B2B para el sector construcción</small>
+    </aside>
   );
 }

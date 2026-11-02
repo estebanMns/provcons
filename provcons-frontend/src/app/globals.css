@@ -419,14 +419,40 @@ a.auth-back { text-decoration: none; width: fit-content; }
 .auth-divider { display: flex; align-items: center; gap: 10px; margin: 18px 0; color: var(--muted); font-size: 8px; }
 .auth-divider span { height: 1px; background: var(--line); flex: 1; }
 .create-account { width: 100%; border: 1px solid var(--line); border-radius: 9px; background: white; color: var(--brand); padding: 12px; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 10px; font-weight: 800; cursor: pointer; }
-.auth-card fieldset { margin: 0 0 15px; padding: 0; border: 0; }
-.auth-card legend { margin-bottom: 8px; font-size: 10px; font-weight: 700; }
-.role-options { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
-.role-options button { min-height: 76px; padding: 12px; display: flex; align-items: flex-start; gap: 9px; border: 1px solid var(--line); border-radius: 9px; background: white; color: var(--muted); text-align: left; cursor: pointer; }
-.role-options button.selected { color: var(--brand); border-color: var(--brand); background: var(--brand-soft); box-shadow: 0 0 0 2px var(--brand-soft); }
-.role-options strong, .role-options small { display: block; }
-.role-options strong { color: var(--ink); font-size: 10px; }
-.role-options small { margin-top: 4px; color: var(--muted); font-size: 8px; line-height: 1.4; }
+/* Registro: dos tarjetas (forma de Figma, estructura de planes) y la excavadora en 3D */
+.excavator-3d { width: 100%; height: 300px; margin: 18px 0 -6px; cursor: grab; touch-action: pan-y; }
+.excavator-3d:active { cursor: grabbing; }
+.excavator-3d canvas { display: block; width: 100% !important; height: 100% !important; }
+.register-panel { width: min(100%, 860px); }
+.register-panel > .eyebrow { margin: 22px 0 6px; }
+.register-panel > h2 { margin: 0 0 8px; font-size: 27px; letter-spacing: -.8px; }
+.register-panel > p { color: var(--ink-soft); font-size: 12px; line-height: 1.6; margin: 0 0 20px; }
+.register-error { margin-bottom: 14px; padding: 10px 14px; border-radius: 10px; background: var(--danger-soft); color: var(--danger); font-size: 12px; }
+.plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 18px; align-items: start; }
+.plan-card { padding: 26px 26px 24px; border-radius: 50px; background: #d9d9d9; border: 3px solid transparent; transition: border-color .15s ease, box-shadow .15s ease; }
+.plan-card.selected { border-color: #f89500; background: #ececec; box-shadow: 0 14px 40px rgba(248, 149, 0, .18); }
+.plan-tag { margin: 0 0 4px; color: #a85f00; font-size: 11px; font-weight: 800; letter-spacing: .06em; }
+.plan-card h3 { margin: 0 0 10px; font-size: 26px; letter-spacing: -.5px; color: #111; }
+.plan-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; background: rgba(255,255,255,.7); color: #2c2c2c; font-size: 11px; font-weight: 600; }
+.plan-headline { margin: 22px 0 18px; font-size: 30px; font-weight: 800; line-height: 1.05; letter-spacing: -.8px; color: #111; }
+.plan-headline small { display: block; margin-top: 4px; font-size: 14px; font-weight: 600; letter-spacing: 0; color: #4a4a4a; }
+.plan-button { width: 100%; min-height: 46px; border: 0; border-radius: 999px; background: #f89500; color: #fff; font-size: 14px; font-weight: 800; cursor: pointer; }
+.plan-button:hover:not(:disabled) { background: #e48900; }
+.plan-button:disabled { opacity: .7; cursor: default; }
+.plan-form { display: grid; gap: 12px; }
+.plan-form label { display: grid; gap: 6px; color: #1d1d1d; font-size: 11px; font-weight: 700; }
+.plan-form input { width: 100%; min-height: 42px; padding: 0 14px; border: 1px solid #c9c9c9; border-radius: 14px; background: #fff; font-size: 13px; outline: 0; }
+.plan-form input:focus { border-color: #f89500; box-shadow: 0 0 0 3px rgba(248, 149, 0, .2); }
+.plan-form .plan-button { margin-top: 4px; }
+.plan-section { display: flex; align-items: center; gap: 8px; margin: 22px 0 10px; padding-top: 18px; border-top: 1px solid rgba(0,0,0,.12); font-size: 14px; font-weight: 700; color: #111; }
+.plan-section svg { color: #f89500; }
+.plan-features { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.plan-features li { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; line-height: 1.45; color: #2c2c2c; }
+.plan-features svg { flex: none; margin-top: 1px; color: #111; }
+@media (max-width: 600px) {
+  .plan-card { border-radius: 34px; padding: 22px 20px; }
+  .plan-headline { font-size: 26px; }
+}
 .legal { display: block; margin-top: 12px; color: var(--muted); text-align: center; font-size: 8px; line-height: 1.5; }
 .welcome-card { text-align: center; }
 .welcome-icon { width: 68px; height: 68px; display: grid; place-items: center; margin: 0 auto 20px; color: var(--brand); background: var(--brand-soft); border-radius: 50%; }
