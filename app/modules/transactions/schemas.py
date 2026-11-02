@@ -23,6 +23,16 @@ class OrderTermsRequest(BaseModel):
     note: str | None = Field(default=None, max_length=300)
 
 
+class OrderItemQuantity(BaseModel):
+    id: int
+    quantity: float = Field(ge=0)  # 0 = quitar el material
+
+
+class OrderItemsUpdate(BaseModel):
+    """Cantidades nuevas que la constructora quiere en la orden."""
+    items: list[OrderItemQuantity] = Field(min_length=1)
+
+
 class OrderItemOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

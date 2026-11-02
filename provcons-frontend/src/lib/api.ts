@@ -582,6 +582,11 @@ export async function confirmOrder(orderId: number, terms: OrderTerms): Promise<
   return fetchAPI<Order>(`/orders/${orderId}/confirm`, { method: "POST", body: JSON.stringify(terms) });
 }
 
+// La constructora ajusta cantidades antes de que el proveedor acepte (0 = quitar)
+export async function updateOrderItems(orderId: number, items: { id: number; quantity: number }[]): Promise<Order> {
+  return fetchAPI<Order>(`/orders/${orderId}/items`, { method: "PATCH", body: JSON.stringify({ items }) });
+}
+
 export async function acceptProposal(orderId: number): Promise<Order> {
   return fetchAPI<Order>(`/orders/${orderId}/proposal/accept`, { method: "POST" });
 }

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { installmentsLabel } from "@/components/ui/InstallmentPicker";
 import { AcceptOrderModal } from "@/components/orders/AcceptOrderModal";
-import { acceptProposal, advanceOrder, cancelOrder, getMe, listOrders, rejectProposal } from "@/lib/api";
+import { acceptProposal, advanceOrder, cancelOrder, getMe, listOrders, rejectProposal, updateOrderItems } from "@/lib/api";
 import type { Order, OrderStatus, User } from "@/lib/api";
 import { formatCOP, formatDate } from "@/lib/format";
 import { orderStatusFor } from "@/lib/orderStatus";
@@ -31,6 +31,7 @@ export function Orders() {
   const [error, setError] = useState("");
   const [toCancel, setToCancel] = useState<Order | null>(null);
   const [toAccept, setToAccept] = useState<Order | null>(null);
+  const [adjustingId, setAdjustingId] = useState<number | null>(null);
 
   useEffect(() => {
     getMe()
@@ -154,7 +155,7 @@ export function Orders() {
 
                   <OrderRequest order={o} />
                   <DeliveryInfo order={o} />
-                  {o.status === "pendiente" && o.proposal && (
+                  {o.status === "pendiente" && o.proposal && adjustingId !== o.id && (
                     <ProposalBox
                       order={o}
                       isProvider={isProvider}
@@ -164,6 +165,13 @@ export function Orders() {
                     />
                   )}
 
+                  {adjustingId === o.id ? (
+                    <OrderItemsEditor
+                      order={o}
+                      onCancel={() => setAdjustingId(null)}
+                      onSaved={(updated) => { replace(updated); setAdjustingId(null); }}
+                    />
+                  ) : (
                   <div className="table-scroll">
                     <table>
                       <thead><tr><th>Material pedido</th><th>Producto del proveedor</th><th>Cantidad</th><th>Precio unitario</th><th>Subtotal</th></tr></thead>
@@ -183,15 +191,17 @@ export function Orders() {
                       </tbody>
                     </table>
                   </div>
+                  )}
 
-                  <OrderActions
+                  {adjustingId !== o.id && <OrderActions
                     order={o}
                     isProvider={isProvider}
                     busy={busy}
+                    onAdjust={() => setAdjustingId(o.id)}
                     onConfirm={() => setToAccept(o)}
                     onAdvance={() => run(o, advanceOrder)}
                     onCancel={() => setToCancel(o)}
-                  />
+                  />}
                 </article>
               );
             })}
@@ -230,9 +240,9 @@ export function Orders() {
   );
 }
 
-function OrderActions({ order, isProvider, busy, onConfirm, onAdvance, onCancel }: {
+function OrderActions({ order, isProvider, busy, onConfirm, onAdvance, onCancel, onAdjust }: {
   order: Order; isProvider: boolean; busy: boolean;
-  onConfirm: () => void; onAdvance: () => void; onCancel: () => void;
+  onConfirm: () => void; onAdvance: () => void; onCancel: () => void; onAdjust: () => void;
 }) {
   const canCancel = order.status === "pendiente" || order.status === "confirmada";
   const buttons = [];
@@ -244,6 +254,7 @@ function OrderActions({ order, isProvider, busy, onConfirm, onAdvance, onCancel 
     if (order.status === "en_transito") buttons.push(<Button key="deliver" icon="check" onClick={onAdvance} disabled={busy}>Marcar entregada</Button>);
     if (canCancel) buttons.unshift(<Button key="reject" variant="ghost" onClick={onCancel} disabled={busy}>Rechazar</Button>);
   } else if (canCancel) {
+    if (order.status === "pendiente") buttons.push(<Button key="adjust" variant="secondary" onClick={onAdjust} disabled={busy}>Ajustar cantidades</Button>);
     buttons.push(<Button key="cancel" variant="ghost" onClick={onCancel} disabled={busy}>Cancelar orden</Button>);
   }
 
@@ -322,6 +333,94 @@ function ProposalBox({ order, isProvider, busy, onAccept, onReject }: {
           <Button icon="check" onClick={onAccept} disabled={busy}>Aceptar condiciones</Button>
         </div>
       )}
+    </div>
+  );
+}
+
+// La constructora sube, baja o quita materiales para cuadrar el total a su presupuesto
+function OrderItemsEditor({ order, onCancel, onSaved }: { order: Order; onCancel: () => void; onSaved: (o: Order) => void }) {
+  const [qty, setQty] = useState<Record<number, string>>(() => Object.fromEntries(order.items.map((i) => [i.id, String(i.quantity)])));
+  const [budget, setBudget] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const num = (v: string) => Math.max(0, Number(v.replace(",", ".")) || 0);
+  const setItem = (id: number, value: string) => setQty((q) => ({ ...q, [id]: value }));
+  const step = (id: number, delta: number) => setItem(id, String(Math.max(0, num(qty[id] ?? "0") + delta)));
+  const newTotal = order.items.reduce((sum, i) => sum + (i.unit_price ?? 0) * num(qty[i.id] ?? "0"), 0);
+  const oldTotal = order.total_amount ?? 0;
+  const diff = newTotal - oldTotal;
+  const budgetValue = num(budget.replace(/\./g, ""));
+  const allZero = order.items.every((i) => num(qty[i.id] ?? "0") === 0);
+
+  const save = async () => {
+    if (allZero) { setError("Deja al menos un material; si no quieres ninguno, cancela la orden."); return; }
+    setSaving(true);
+    setError("");
+    try {
+      onSaved(await updateOrderItems(order.id, order.items.map((i) => ({ id: i.id, quantity: num(qty[i.id] ?? "0") }))));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudieron guardar las cantidades");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="items-editor">
+      <div className="table-scroll">
+        <table>
+          <thead><tr><th>Material pedido</th><th>Cantidad</th><th>Precio unitario</th><th>Subtotal</th><th aria-label="Quitar" /></tr></thead>
+          <tbody>
+            {order.items.map((item) => {
+              const value = num(qty[item.id] ?? "0");
+              const removed = value === 0;
+              return (
+                <tr key={item.id} className={removed ? "removed" : ""}>
+                  <td>{item.requested_material}<small>{item.material_name}</small></td>
+                  <td>
+                    <div className="qty-stepper">
+                      <button type="button" onClick={() => step(item.id, -1)} disabled={saving || removed} aria-label={`Quitar una unidad de ${item.requested_material}`}>−</button>
+                      <input inputMode="decimal" value={qty[item.id] ?? ""} onChange={(e) => setItem(item.id, e.target.value)} disabled={saving} aria-label={`Cantidad de ${item.requested_material}`} />
+                      <button type="button" onClick={() => step(item.id, 1)} disabled={saving} aria-label={`Agregar una unidad de ${item.requested_material}`}>+</button>
+                      <span>{item.unit}</span>
+                    </div>
+                  </td>
+                  <td>{item.unit_price != null ? formatCOP(item.unit_price) : "—"}</td>
+                  <td>{item.unit_price != null ? formatCOP(item.unit_price * value) : "—"}</td>
+                  <td>
+                    {removed
+                      ? <button type="button" className="link-btn" onClick={() => setItem(item.id, String(item.quantity))} disabled={saving}>Volver a poner</button>
+                      : <button type="button" className="link-btn danger" onClick={() => setItem(item.id, "0")} disabled={saving}>Quitar</button>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="items-summary">
+        <div className="items-totals">
+          <span>Total actual <strong>{formatCOP(oldTotal)}</strong></span>
+          <span aria-hidden>→</span>
+          <span>Nuevo total <strong>{formatCOP(newTotal)}</strong></span>
+          {diff !== 0 && <span className={diff < 0 ? "down" : "up"}>{diff < 0 ? "−" : "+"}{formatCOP(Math.abs(diff))}</span>}
+        </div>
+        <label className="items-budget">Tu presupuesto (opcional)
+          <input inputMode="numeric" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="Ej. 16000000" disabled={saving} />
+        </label>
+        {budgetValue > 0 && (
+          <p className={newTotal <= budgetValue ? "budget-ok" : "budget-over"}>
+            {newTotal <= budgetValue ? `Cabe en tu presupuesto (sobran ${formatCOP(budgetValue - newTotal)}).` : `Se pasa de tu presupuesto por ${formatCOP(newTotal - budgetValue)}.`}
+          </p>
+        )}
+        {order.proposal && <p className="items-warning"><Icon name="warning" size={14} /> Al guardar, la propuesta del proveedor se anula y él revisará el nuevo total.</p>}
+        {error && <p className="items-error" role="alert">{error}</p>}
+        <div className="items-actions">
+          <Button variant="ghost" onClick={onCancel} disabled={saving}>Cancelar</Button>
+          <Button icon="check" onClick={save} disabled={saving}>{saving ? "Guardando…" : "Guardar cambios"}</Button>
+        </div>
+      </div>
     </div>
   );
 }

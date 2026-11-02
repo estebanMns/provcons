@@ -187,6 +187,43 @@ class OrderService:
         details = {**terms, "stock": stock} if stock else terms
         return await self._save_and_record(order, action, actor_user_id, actor_org_id, details=details)
 
+    async def update_items(
+        self, order_id: int, actor_user_id: int, actor_org_id: int, quantities: dict[int, float],
+    ) -> dict:
+        """La constructora sube, baja o quita materiales para ajustar el total a
+        su presupuesto, mientras el proveedor no haya aceptado."""
+        order = await self._get_for_party(order_id, actor_org_id)
+        if order.constructora_org_id != actor_org_id:
+            raise ForbiddenError("Solo la constructora puede ajustar las cantidades")
+        if order.status != OrderStatus.pendiente:
+            raise ConflictError("Solo se pueden ajustar las cantidades antes de que el proveedor acepte la orden")
+
+        # No se puede pedir más de lo que el proveedor tiene
+        inventory = await self.repository.inventory_for_order(order)
+        over = []
+        for item in order.items:
+            product = inventory.get(item.match_id)
+            qty = quantities.get(item.id)
+            if product is not None and qty is not None and qty > (product.quantity_available or 0):
+                over.append(f"{item.requested_material} (el proveedor tiene {product.quantity_available:g})")
+        if over:
+            raise ConflictError("No hay tanto stock: " + "; ".join(over))
+
+        total_before, had_proposal = order.total_amount, bool(order.proposal)
+        try:
+            changes = order.update_quantities(quantities)
+        except ValueError as e:
+            raise ConflictError(str(e))
+        if not changes:
+            return (await self._to_out([order]))[0]
+        if had_proposal:
+            order.proposal = None  # el proveedor debe revisar el nuevo total
+        return await self._save_and_record(
+            order, "order.items_updated", actor_user_id, actor_org_id,
+            details={"changes": changes, "total_before": total_before, "total_after": order.total_amount,
+                     "proposal_cancelled": had_proposal},
+        )
+
     async def respond_proposal(
         self, order_id: int, actor_user_id: int, actor_org_id: int, accept: bool, now: datetime | None = None,
     ) -> dict:

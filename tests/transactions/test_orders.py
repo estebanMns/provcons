@@ -362,3 +362,60 @@ def test_orden_antigua_a_cuotas_sin_numero_pide_aprobacion():
     assert order.requires_client_approval(1) and order.requires_client_approval(6)
     contado = Order(status=OrderStatus.pendiente, payment_terms=PaymentTerms.contado, predicted_negotiation={})
     assert not contado.requires_client_approval(1)
+
+
+def _item_ids(out):
+    return {i.requested_material: i.id for i in out["items"]}
+
+
+def test_ajustar_cantidades_recalcula_subtotales_y_total(setup):
+    service, repo, audit, _, ids = setup
+    out = _create(service, [ids["cemento_valle"], ids["varilla_valle"]])[0]  # 100 x 25.000 + 50 x 18.500
+    by_name = _item_ids(out)
+    out = asyncio.run(service.update_items(out["id"], 1, CONSTRUCTORA, {by_name["cemento gris"]: 60, by_name["varilla 3/8"]: 80}))
+    subtotals = {i.requested_material: i.subtotal for i in out["items"]}
+    assert subtotals == {"cemento gris": 60 * 25000, "varilla 3/8": 80 * 18500}
+    assert out["total_amount"] == 60 * 25000 + 80 * 18500
+    assert "order.items_updated" in audit.actions
+
+
+def test_cero_quita_el_material_y_queda_libre_para_otro_proveedor(setup):
+    service, *_, ids = setup
+    out = _create(service, [ids["cemento_valle"], ids["varilla_valle"]])[0]
+    out = asyncio.run(service.update_items(out["id"], 1, CONSTRUCTORA, {_item_ids(out)["cemento gris"]: 0}))
+    assert [i.requested_material for i in out["items"]] == ["varilla 3/8"]
+    assert out["total_amount"] == 50 * 18500
+    assert _create(service, [ids["cemento_argos"]])[0]["provider_org_id"] == ARGOS  # el cemento ya se puede pedir
+
+
+def test_no_se_pueden_quitar_todos_los_materiales(setup):
+    service, *_, ids = setup
+    out = _create(service, [ids["varilla_valle"]])[0]
+    with pytest.raises(ConflictError, match="al menos un material"):
+        asyncio.run(service.update_items(out["id"], 1, CONSTRUCTORA, {_item_ids(out)["varilla 3/8"]: 0}))
+
+
+def test_solo_la_constructora_y_antes_de_aceptar(setup):
+    service, *_, ids = setup
+    out = _create(service, [ids["varilla_valle"]])[0]
+    item_id = _item_ids(out)["varilla 3/8"]
+    with pytest.raises(ForbiddenError):
+        asyncio.run(service.update_items(out["id"], 2, VALLE, {item_id: 10}))
+    asyncio.run(service.confirm_order(out["id"], 2, VALLE, delivery_days=5))
+    with pytest.raises(ConflictError):
+        asyncio.run(service.update_items(out["id"], 1, CONSTRUCTORA, {item_id: 10}))
+
+
+def test_no_se_puede_pedir_mas_del_stock_del_proveedor(setup):
+    service, repo, _, _, ids = setup
+    out = _create(service, [ids["varilla_valle"]])[0]  # el proveedor tiene 1000
+    with pytest.raises(ConflictError, match="el proveedor tiene 1000"):
+        asyncio.run(service.update_items(out["id"], 1, CONSTRUCTORA, {_item_ids(out)["varilla 3/8"]: 1500}))
+
+
+def test_ajustar_anula_la_propuesta_pendiente(setup):
+    service, *_, ids = setup
+    out = _create(service, [ids["varilla_valle"]])[0]
+    asyncio.run(service.confirm_order(out["id"], 2, VALLE, delivery_days=5, installments=3))
+    out = asyncio.run(service.update_items(out["id"], 1, CONSTRUCTORA, {_item_ids(out)["varilla 3/8"]: 20}))
+    assert out["proposal"] is None and out["status"] == OrderStatus.pendiente and out["total_amount"] == 20 * 18500

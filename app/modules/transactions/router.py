@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.modules.transactions.repository import OrderRepository
 from app.modules.transactions.service import OrderService
-from app.modules.transactions.schemas import OrderCreate, OrderEvaluationOut, OrderOut, OrderTermsRequest
+from app.modules.transactions.schemas import OrderCreate, OrderEvaluationOut, OrderItemsUpdate, OrderOut, OrderTermsRequest
 from app.modules.transactions.credit_narrator import AICreditNarrator, TemplateCreditNarrator
 from app.modules.forecast.service import ForecastCache
 from app.infrastructure.ai_client import AIClient
@@ -82,6 +82,21 @@ async def confirm_order(
         order_id, current_user.id, current_user.organization_id,
         delivery_days=payload.delivery_days, installments=payload.installments,
         monthly_rate_pct=payload.monthly_rate_pct, note=payload.note,
+    )
+
+
+@router.patch("/{order_id}/items", response_model=OrderOut)
+async def update_order_items(
+    order_id: int,
+    payload: OrderItemsUpdate,
+    service: OrderService = Depends(get_order_service),
+    current_user: User = Depends(get_current_user),
+):
+    """La constructora ajusta cantidades (0 quita el material) antes de que el
+    proveedor acepte. Si había una propuesta, se anula."""
+    return await service.update_items(
+        order_id, current_user.id, current_user.organization_id,
+        {i.id: i.quantity for i in payload.items},
     )
 
 

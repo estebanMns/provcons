@@ -109,6 +109,36 @@ class Order(Base, TimestampMixin):
         self.require_open_for_provider()
         self.proposal = {**terms, "proposed_at": now.isoformat()}
 
+    def update_quantities(self, changes: dict[int, float]) -> list[dict]:
+        """La constructora ajusta cantidades antes de que el proveedor acepte.
+        0 quita el material. Recalcula subtotales y total; si había una
+        propuesta, se anula porque estaba calculada con el total anterior."""
+        if self.status != OrderStatus.pendiente:
+            raise ValueError("Solo se pueden ajustar las cantidades antes de que el proveedor acepte la orden")
+        by_id = {item.id: item for item in self.items}
+        unknown = set(changes) - set(by_id)
+        if unknown:
+            raise ValueError("Algún material no pertenece a esta orden")
+        if any(qty < 0 for qty in changes.values()):
+            raise ValueError("Las cantidades no pueden ser negativas")
+        if all(changes.get(item.id, item.quantity) <= 0 for item in self.items):
+            raise ValueError("La orden debe conservar al menos un material; si no quieres ninguno, cancélala")
+
+        applied = []
+        for item_id, qty in changes.items():
+            item = by_id[item_id]
+            if qty == item.quantity:
+                continue
+            applied.append({"item_id": item_id, "material": item.requested_material, "before": item.quantity, "after": qty})
+            if qty == 0:
+                self.items.remove(item)  # delete-orphan lo borra al guardar
+            else:
+                item.quantity = qty
+                item.subtotal = round(item.unit_price * qty, 2) if item.unit_price else None
+        if applied:
+            self.total_amount = round(sum(i.subtotal or 0 for i in self.items), 2)
+        return applied
+
     def require_pending_proposal(self) -> None:
         if self.status != OrderStatus.pendiente or not self.proposal:
             raise ValueError("Esta orden no tiene una propuesta por responder")
